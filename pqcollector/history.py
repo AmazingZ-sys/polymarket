@@ -9,6 +9,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
+from uuid import uuid4
 
 import polars as pl
 from psycopg import sql
@@ -194,19 +195,33 @@ def import_new(admin_dsn: str, name: str, manifest: Path, expected: str) -> dict
     if not re.fullmatch(r"pq_history_[a-z0-9_]{1,48}", name):
         raise ValueError("Choose a new pq_history_ database name")
     data = manifest_for_import(manifest, expected)
-    # CREATE DATABASE has no IF NOT EXISTS, making an accidental merge impossible.
+    scratch = "pq_loading_" + uuid4().hex
     with connect(admin_dsn) as admin:
-        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
-        admin.execute(sql.SQL("ALTER DATABASE {} SET polyquant.mode='history'").format(sql.Identifier(name)))
-    dsn = make_conninfo(admin_dsn, dbname=name)
-    migrate(dsn)
-    with connect(dsn) as db, db.transaction():
-        for table in TABLES[:-1]:
-            load_table(db, table, data["references"][table], manifest.parent)
-        total = restore_events(db, data, manifest.parent)
-        load_table(db, "market_resolutions", data["references"]["market_resolutions"], manifest.parent)
-        db.execute("""CREATE TABLE imported_history (sha256 text PRIMARY KEY, event_count bigint NOT NULL,
-            imported_at timestamptz NOT NULL DEFAULT now())""")
-        db.execute("INSERT INTO imported_history(sha256,event_count) VALUES(%s,%s)", (expected, total))
-        db.execute("ALTER TABLE paper_accounts ADD CONSTRAINT historical_accounts_only CHECK(mode='BACKTEST')")
+        if admin.execute("SELECT 1 FROM pg_database WHERE datname=%s", (name,)).fetchone():
+            raise ValueError("Target database already exists")
+        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(scratch)))
+        try:
+            admin.execute(
+                sql.SQL("ALTER DATABASE {} SET polyquant.mode='history'").format(sql.Identifier(scratch))
+            )
+            dsn = make_conninfo(admin_dsn, dbname=scratch)
+            migrate(dsn)
+            with connect(dsn) as db, db.transaction():
+                for table in TABLES[:-1]:
+                    load_table(db, table, data["references"][table], manifest.parent)
+                total = restore_events(db, data, manifest.parent)
+                load_table(db, "market_resolutions", data["references"]["market_resolutions"], manifest.parent)
+                db.execute("""CREATE TABLE imported_history (sha256 text PRIMARY KEY, event_count bigint NOT NULL,
+                    imported_at timestamptz NOT NULL DEFAULT now())""")
+                db.execute("INSERT INTO imported_history(sha256,event_count) VALUES(%s,%s)", (expected, total))
+                db.execute(
+                    "ALTER TABLE paper_accounts ADD CONSTRAINT historical_accounts_only CHECK(mode='BACKTEST')"
+                )
+            admin.execute(
+                sql.SQL("ALTER DATABASE {} RENAME TO {}").format(sql.Identifier(scratch), sql.Identifier(name))
+            )
+        except BaseException:
+            # Only remove the new, unpublished database created by this call.
+            admin.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(scratch)))
+            raise
     return {"database": name, "sha256": expected, "events": total}

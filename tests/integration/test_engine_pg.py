@@ -234,3 +234,96 @@ def test_changed_build_refuses_resume_or_replay(db):
     )
     backtest_step(db)
     assert first(db, "SELECT status FROM backtest_runs WHERE id=%s", (run["id"],))["status"] == "FAILED"
+
+
+@pytest.fixture
+def financial_db(db):
+    for name in (
+        "010_admin.sql",
+        "030_operations.sql",
+        "031_reports.sql",
+        "032_evaluations.sql",
+        "033_report_evidence.sql",
+        "034_validation_evidence.sql",
+    ):
+        db.execute(Path("database/migrations", name).read_text())
+    return db
+
+
+def test_report_marks_open_exposure_unknown_and_deduplicates_counterfactuals(financial_db):
+    db = financial_db
+    a = active(db)
+    clone = active(db)
+    for e in [
+        book(db, 0, "UP"),
+        book(db, 20, "DOWN"),
+        book(db, 200, "UP"),
+        book(db, 210, "DOWN"),
+        book(db, 700, "UP"),
+    ]:
+        for acct in (a, clone):
+            process(db, acct, e)
+    # Set fixture account inception to its logical research instant for period reporting.
+    db.execute("UPDATE paper_accounts SET created_at=%s", (T,))
+    before = first(db, "SELECT pq_report(NULL,%s,%s,'test-open')->'result' result", (T, T + timedelta(seconds=6)))[
+        "result"
+    ]
+    assert before["net_pnl"] is None and before["valuation_quality"] == "MISSING_BOUNDARY_MARK"
+    r = resolution(db, 8000)
+    for acct in (a, clone):
+        process(db, acct, r)
+    db.execute(
+        """INSERT INTO market_resolutions(market_id,outcome,rule_version,source,event_id,received_at)
+       VALUES('TEST','UP','r1','TEST',%s,%s)""",
+        (r["event_id"], r["received_at"]),
+    )
+    after = first(
+        db, "SELECT pq_report(NULL,%s,%s,'test-closed')->'result' result", (T, T + timedelta(seconds=10))
+    )["result"]
+    assert after["settlements"] == 2 and after["probability_samples"] == 1
+
+
+def test_evaluation_operating_cost_uses_market_units_and_window(financial_db):
+    db = financial_db
+    a = active(db)
+    for ms, side in [(0, "UP"), (20, "DOWN"), (210, "UP"), (260, "DOWN"), (700, "UP")]:
+        book(db, ms, side)
+    resolution(db, 900)
+    end = T + timedelta(seconds=1)
+    cfg = {"start_time": T.isoformat(), "end_time": end.isoformat(), "strategy_id": "S01", "config": {}}
+    ids = []
+    for multiplier in ("1", "1.5"):
+        cfg["config"] = {"cost_multiplier": multiplier}
+        run = first(db, "INSERT INTO backtest_runs(config) VALUES(%s) RETURNING id", (Jsonb(cfg),))
+        backtest_step(db)
+        backtest_step(db)
+        ids.append(str(run["id"]))
+    exp = first(
+        db,
+        """INSERT INTO comparison_experiments(name,hypothesis,account_ids,criteria,snapshot,created_at)
+       VALUES('TEST','TEST',ARRAY[%s]::uuid[],'TEST','{}',%s) RETURNING id""",
+        (a["id"], T),
+    )
+    # Prior large profit must not appear in this evaluation window.
+    db.execute(
+        """INSERT INTO paper_settlements(account_id,market_id,outcome,payout,cost,realized_pnl,source,rule_version,event_id,created_at)
+         VALUES(%s,'PAST','UP',10,1,9,'TEST','r1','TEST_PRIOR',%s)""",
+        (a["id"], T - timedelta(days=1)),
+    )
+    data = {
+        "account_id": str(a["id"]),
+        "experiment_id": str(exp["id"]),
+        "backtest_id": ids[0],
+        "stress_backtest_id": ids[1],
+        "checks": {},
+        "cost_usd": "2",
+        "evidence": "explicitly synthetic regression",
+    }
+    eval_row = first(db, "SELECT pq_evaluate(%s,'test') r", (Jsonb(data),))["r"]
+    metrics = eval_row["metrics"]
+    assert eval_row["status"] == "INSUFFICIENT_DATA" and metrics["out_of_sample_settled_fills"] == 2
+    assert metrics["out_of_sample_settled_markets"] == 1 and Decimal(metrics["cost_per_settled_market"]) == 2
+    assert metrics["paper_net_after_cost"] is None and metrics["observed_utc_days"] == 0
+    with pytest.raises(psycopg.errors.RaiseException), db.transaction():
+        data["cost_usd"] = "-100"
+        first(db, "SELECT pq_evaluate(%s,'test') r", (Jsonb(data),))

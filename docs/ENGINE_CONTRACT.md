@@ -7,3 +7,7 @@ paper_accounts 使用 id、name、mode、status、strategy_id、strategy_version
 backtest_runs 可写 config JSONB 新建任务，status 默认 QUEUED；查询 id、status、progress、config、result、created_at。取消仅在 QUEUED 或 RUNNING 时更新为 CANCELLED。config 支持 start_time、end_time、strategy_id、strategy_version、initial_balance 和账户 config。
 
 采集事件表 engine_events 的 seq、kind、market_id、event_id、event_time、received_at、data 和 quality_flags 构成输入。BOOK 的 data 包含 side、token_id、asks、bids、tick_size、minimum_order_size、fee_rate、fee_exponent、asset、timeframe、start_time、end_time、rule_version、rule_verified、accepting_orders。RESOLUTION 需 verified、outcome、rule_version 和 source。GAP 使已知订单簿失效。输入的所有时间均为 UTC。
+
+config.strategies 可选，至多包含四个附加策略对象，每项提供 strategy_id、strategy_version。数据库在创建时冻结附加版本的参数和实现 SHA-256。风险和虚拟现金限额由同一组合账户统一维护。费用压力 cost_multiplier 为 1 至 3，延迟压力 latency_multiplier 为 1 至 5。
+
+策略构建标识通过 services.engine.build.engine_hash() 计算。修改任何受摘要覆盖的文件会导致旧账户拒绝启动、新回放返回 FAILED。发布不同实现时应增加不可变的策略版本和迁移记录；需要重新分析旧实验时使用原始发布构建及原始事件数据。

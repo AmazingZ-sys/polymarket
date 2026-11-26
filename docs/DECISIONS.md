@@ -8,3 +8,7 @@
 |2026-11-26|源断开时前端显示空样本和状态，外部参考价单列|使受限部署仍能验证会话、账本及恢复，同时避免生成误导性成交|
 
 [PostgreSQL 锁](https://www.postgresql.org/docs/current/explicit-locking.html) · [Compose 启动依赖](https://docs.docker.com/compose/how-tos/startup-order/) · [Hono Node 适配](https://hono.dev/docs/getting-started/nodejs)
+
+- API、采集、模拟、运维分别使用受限数据库角色，DDL 归迁移进程。
+- 市场 RAW 冷归档保留哈希、原 ID 与序号索引。历史导入使用清单恢复到独立库，打开 BACKTEST 前重新核验。
+- 所有账户冻结策略版本、配置及代码摘要。具备重新运行证据的候选策略通过研究协议后，管理员可以登记基线变更。

@@ -12,3 +12,5 @@
 |运维|按 UTC 期间及任务键去重报告，通过持久通知队列调度和重试|
 
 当前实际列、索引、唯一约束与可用查询视图以迁移文件为准。备份需同时包含数据库和归档目录。
+
+迁移按文件全名排序，前导数字用于分组。runtime-grants.sql 在指定运行角色密码时重复应用。市场时间窗可按 asset/timeframe/start_time 检索。engine_events 通过市场、种类、序号及时间 BRIN 索引定位观测。balance_ledger(account_id,id) 关联前后余额。paper_settlements(account_id,market_id) 唯一约束防止重复兑付。配置通过触发器保护。冷热转移与恢复由 BACKTEST.md 和 DATA_QUALITY.md 定义。

@@ -96,24 +96,13 @@ def compact_raw(db, directory: Path, *, retention_hours: int = 24, limit: int = 
         with db.transaction():
             rows = db.execute(
                 """SELECT event_id,seq FROM engine_events WHERE seq BETWEEN %s AND %s AND kind='RAW'
-                ORDER BY seq FOR UPDATE""",
+                ORDER BY seq""",
                 (dataset["first_seq"], dataset["last_seq"]),
             ).fetchall()
             ids = [(r["event_id"], r["seq"]) for r in rows]
             if ids != list(raw.iter_rows()):
                 raise RuntimeError("Archive event identities differ, keeping hot observations")
-            db.execute(
-                """INSERT INTO archived_raw_events SELECT event_id,seq,%s FROM engine_events
-                WHERE seq BETWEEN %s AND %s AND kind='RAW'""",
-                (dataset["version"], dataset["first_seq"], dataset["last_seq"]),
-            )
-            db.execute(
-                "DELETE FROM engine_events WHERE seq BETWEEN %s AND %s AND kind='RAW'",
-                (dataset["first_seq"], dataset["last_seq"]),
-            )
-            db.execute(
-                "UPDATE dataset_versions SET raw_compacted_at=now() WHERE version=%s", (dataset["version"],)
-            )
+            db.execute("SELECT pq_archive_raw(%s)", (dataset["version"],))
             moved += len(ids)
     return moved
 

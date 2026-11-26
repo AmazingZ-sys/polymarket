@@ -1,0 +1,5 @@
+{
+  "http": {"runtime":"Docker python:3.12-slim default network","at":"2026-11-26T01:57:00.374557+00:00","results":[{"source":"gamma","status":200},{"source":"clob_time","status":403,"error_class":"HTTPError"},{"source":"kraken","status":200}]},
+  "public_websocket": {"runtime":"Docker node:22-alpine default network","at":"2026-11-26T01:59:39.363Z","ws":"FRAME_RECEIVED","gamma":200,"kinds":["book","book"],"market":"7333540"},
+  "history_restore": {"manifest_sha256":"fcc2cd748d52858eea6a8539157913c28c58af26e45f335b3adc40fbb4ab4f4c","events":23887,"markets":24,"resolved_markets":10,"min_seq":1,"max_seq":24014,"collector_rejected_history_database":true}
+}

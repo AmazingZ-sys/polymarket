@@ -1,0 +1,174 @@
+import {
+  Activity,
+  Archive,
+  ArrowLeftRight,
+  BarChart3,
+  BookOpen,
+  Boxes,
+  ChartCandlestick,
+  CircleDollarSign,
+  ClipboardList,
+  Compass,
+  Database,
+  FileClock,
+  FlaskConical,
+  Gauge,
+  GitBranch,
+  HeartPulse,
+  History,
+  Layers,
+  LayoutDashboard,
+  ListTree,
+  Receipt,
+  SearchCheck,
+  Settings2,
+  ShieldAlert,
+  SlidersHorizontal,
+  Wallet,
+  Wrench,
+} from 'lucide-vue-next'
+
+export const groups = [
+  {
+    name: '市场工作区',
+    items: [
+      {
+        key: 'dashboard',
+        label: '总览',
+        en: 'Dashboard',
+        icon: LayoutDashboard,
+      },
+      {
+        key: 'markets',
+        label: '实时市场',
+        en: 'Markets',
+        icon: ChartCandlestick,
+      },
+      {
+        key: 'opportunities',
+        label: '研究机会',
+        en: 'Opportunities',
+        icon: Compass,
+      },
+      {
+        key: 'data-sources',
+        label: '数据中心',
+        en: 'Data center',
+        icon: Database,
+      },
+    ],
+  },
+  {
+    name: '模拟交易',
+    items: [
+      {
+        key: 'paper-accounts',
+        label: '模拟盘',
+        en: 'Paper trading',
+        icon: Wallet,
+      },
+      {
+        key: 'paper-orders',
+        label: '模拟订单',
+        en: 'Orders',
+        icon: ClipboardList,
+      },
+      {
+        key: 'paper-positions',
+        label: '模拟持仓',
+        en: 'Positions',
+        icon: Layers,
+      },
+      {
+        key: 'paper-fills',
+        label: '成交记录',
+        en: 'Fills',
+        icon: ArrowLeftRight,
+      },
+      {
+        key: 'settlements',
+        label: '结算记录',
+        en: 'Settlements',
+        icon: Receipt,
+      },
+      { key: 'risk', label: '风险控制', en: 'Risk control', icon: ShieldAlert },
+    ],
+  },
+  {
+    name: '研究与实验',
+    items: [
+      {
+        key: 'evaluations',
+        label: '策略评估',
+        en: 'Evaluations',
+        icon: SearchCheck,
+      },
+      {
+        key: 'strategies',
+        label: '策略管理',
+        en: 'Strategies',
+        icon: SlidersHorizontal,
+      },
+      {
+        key: 'strategy-versions',
+        label: '策略版本',
+        en: 'Versions',
+        icon: GitBranch,
+      },
+      {
+        key: 'experiments',
+        label: '对照实验',
+        en: 'Experiments',
+        icon: FlaskConical,
+      },
+      { key: 'backtests', label: '历史回测', en: 'Backtests', icon: History },
+      { key: 'analytics', label: '收益分析', en: 'Analytics', icon: BarChart3 },
+      {
+        key: 'attributions',
+        label: '亏损归因',
+        en: 'Attribution',
+        icon: SearchCheck,
+      },
+      {
+        key: 'improvements',
+        label: '改进建议',
+        en: 'Improvements',
+        icon: Wrench,
+      },
+      { key: 'reports', label: '研究报告', en: 'Reports', icon: BookOpen },
+    ],
+  },
+  {
+    name: '系统管理',
+    items: [
+      { key: 'system', label: '系统监控', en: 'Monitoring', icon: HeartPulse },
+      { key: 'jobs', label: '定时任务', en: 'Scheduled jobs', icon: FileClock },
+      { key: 'logs', label: '系统日志', en: 'Audit logs', icon: ListTree },
+      { key: 'settings', label: '系统设置', en: 'Settings', icon: Settings2 },
+    ],
+  },
+]
+export const pages = [
+  ...groups.flatMap((g) => g.items),
+  {
+    key: 'ledger',
+    label: '虚拟资金流水',
+    en: 'Ledger',
+    icon: CircleDollarSign,
+  },
+  { key: 'equity', label: '权益快照', en: 'Equity', icon: Gauge },
+  {
+    key: 'market-events',
+    label: '历史市场事件',
+    en: 'Market events',
+    icon: Activity,
+  },
+  {
+    key: 'paper-account',
+    label: '模拟盘详情',
+    en: 'Paper account',
+    icon: Boxes,
+  },
+  { key: 'market', label: '市场详情', en: 'Market', icon: Archive },
+]
+export const byKey = Object.fromEntries(pages.map((p) => [p.key, p]))

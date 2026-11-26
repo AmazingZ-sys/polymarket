@@ -14,12 +14,24 @@
 
 ## 数据边界
 
-控制台仅访问 Hono 管理 API。全部请求前缀为 `/api/v1`，独立部署可以在构建时指定公开 API 地址。登录使用会话 cookie，页面加载前检查 `GET /auth/me`；账户写入使用 UUID 幂等键。分页请求传 limit 和 offset，响应返回 data 及 meta。SSE 的 refresh 事件触发可见视图刷新；断线、权限不足与无数据分别展示。检查错误后可以手动重试。账户操作按钮由状态和身份角色共同决定。
+控制台仅访问 Hono 管理 API。全部请求前缀为 `/api/v1`，Vercel 在部署时以 PQ_API_ORIGIN 生成同源 API 反代规则。登录使用会话 cookie，页面加载前检查 `GET /auth/me`；账户写入使用 UUID 幂等键。分页请求传 limit 和 offset，响应返回 data 及 meta。SSE 的 refresh 事件触发可见视图刷新；断线、权限不足与无数据分别展示。检查错误后可以手动重试。账户操作按钮由状态和身份角色共同决定。
 
 集合数据采用后端 snake_case。资金的 API 传输保持十进制字符串。图表可以进行显示精度转换，账务计算归引擎。浏览器通过 Intl 将 UTC 转为选定时区。正式包内不包含模拟行情或样本曲线。没有任何权益观察时展示空图，没有成交时胜率显示为缺少样本。来源未返回、数据延迟和非交易时间不应显示为实时正常。
 
 ## 部署与验收
 
-Vite 产物 `dist/` 可由 Nginx 或 Vercel 提供静态服务。History 路由需要将前端路径回退到 index.html，API/SSE 必须优先交由后端。生产环境首选同源反代，跨源部署需匹配 API 的会话和来源策略。浏览器测试覆盖登录、创建虚拟账户、二次确认、操作后状态与登出，响应测试样本仅在测试范围内。数据接口、权限、字段及运行方式以 API、部署与测试文档为准。
+Vite 产物 `dist/` 可由 Nginx 或 Vercel 提供静态服务。History 路由需要将前端路径回退到 index.html，API/SSE 必须优先交由后端。Vercel 项目根目录选 apps/web，设置 PQ_API_ORIGIN 为后端公开 HTTPS 源站（仅 scheme + host），后端 PUBLIC_ORIGIN 填终端域名、COOKIE_SECURE=true。浏览器通过同源会话访问 API。浏览器测试覆盖登录、创建虚拟账户、二次确认、操作后状态与登出，响应测试样本仅在测试范围内。数据接口、权限、字段及运行方式以 API、部署与测试文档为准。
 
 官方资料于 2026-11-26 查阅。[Vite 部署](https://vite.dev/guide/static-deploy.html) · [Vue Router History](https://router.vuejs.org/guide/essentials/history-mode.html) · [Pinia Store](https://pinia.vuejs.org/core-concepts/) · [Naive UI](https://www.naiveui.com/) · [ECharts 折线及面积](https://echarts.apache.org/handbook/en/how-to/chart-types/line/area-line/)
+
+## 数据口径
+
+总览包含全部 PAPER 账户的权益和初始虚拟资金，归档账户的观察仍计入综合统计。账户权益减初始资金形成累计模拟净收益；每日已结算净收益按 UTC 结算日累加实际模拟账务，尚未发生结算的日期保留为空。账户最大回撤峰值取各账户历史最大值。净值曲线按 UTC 日末取每个已创建账户最新一笔权益快照。资产与策略收益表使用已结算样本，胜率分母包括零收益结算。每个账户使用同一行情构造独立的反事实研究路径。
+
+Vercel 管理 API 使用部署时环境中的源站生成外部 rewrite，然后回退前端 History 路由。[Vercel 程序化配置](https://vercel.com/docs/project-configuration/vercel-ts) · [Rewrites](https://vercel.com/docs/routing/rewrites)
+
+## 评估、账务与归因
+
+策略评估先选择预注册实验、独立模拟账户、两份已完成回放，再登记运行成本、压力与样本外证据。策略版本仅可选择当前版本的 VALIDATION_PASSED 评估申请晋级，服务端在事务中复核资格。模拟盘及回放支持固定主策略和最多四个附加版本，并记录费用、延迟及撮合压力参数。
+
+亏损归因页面的金额筛选使用正数表示亏损绝对值，输 0 仍限定为亏损成交。归因时间区间使用 UTC 左闭右开。质量分类按成交时订单簿事件的质量标志计算，缺少证据显示 UNKNOWN。记录详情可直接查看信号、成交盘口与结算的原始事件。

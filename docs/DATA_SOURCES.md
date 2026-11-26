@@ -25,3 +25,5 @@ Kraken 单独提供公共 BTC/USD、ETH/USD 参考数据。本机同一请求取
 可选的 PolyBolt 适配器仅在服务端具备既有 CLOB 数据访问凭证和已授权的 Chainlink key 时连接。环境变量为 POLYBOLT_API_KEY、POLYBOLT_API_SECRET、POLYBOLT_PASSPHRASE 和 CHAINLINK_API_KEY。向官方 WSS 完成 auth，再订阅 price.crypto.twap，逐条核对 source、symbol、window_seconds、seq 与 full_accuracy_value。来源不符、断线或序号缺口会清空缓存。绝不把订阅初始历史快照提前到收到之前用于决策。此连接在本机缺少授权，实网验证状态 UNVERIFIED，离线契约校验见测试。[认证与数据帧](https://docs.polymarket.com/api-reference/live-data/overview.md) · [机器可读协议](https://ws-live-v2.polymarket.com/asyncapi.json)
 
 Kraken 的公开成交接口按币种维护独立 cursor，事务记录已接收的成交、成交 ID、采集进度。滚动 60 秒观测期的相邻成交对数收益平方和开方给出未年化的已实现波动；同时保存样本数和覆盖秒数。冷启动样本不足时保留真实覆盖。补充现场验证抓取了 207 笔成交和 4 条窗口统计。[Kraken 逐笔成交](https://docs.kraken.com/api-reference/market-data/get-recent-trades)
+
+独立 Docker 网络复查中，python:3.12-slim 访问 Gamma、Kraken 得到 200，CLOB /time 得到 403。node:22-alpine 对公开 WS 的真实订阅从市场 7333540 收到两边 token 的全量 book。容器内 Chainlink 授权订阅仍为 UNVERIFIED。生产应依具体容器的最新观察判断当前可用性。[容器实测与恢复记录](evidence/2026-11-26/container-probe.json)

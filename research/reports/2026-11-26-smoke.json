@@ -245,5 +245,20 @@
     }
   },
   "replications_with_identical_results": 2,
-  "generated_at_utc": "2026-11-26T01:52:36.187242+00:00"
+  "generated_at_utc": "2026-11-26T01:52:36.187242+00:00",
+  "release_paper_verification": {
+    "account_id": "84d027bb-0ca1-477f-b1f1-a6ebd5a22aca",
+    "scope": "independent live capture after clean migrations",
+    "implementation_hash": "afd072c9d198533dbc25903007de0c37d6cb6c50baf14689d5d321b75dcd16fb",
+    "mode": "PAPER",
+    "strategy_id": "S00",
+    "run_utc": "2026-11-26T01:54:05.521767+00:00",
+    "risk_halted_utc": "2026-11-26T01:54:14.382303+00:00",
+    "reason": "MARKET_DATA_GAP",
+    "signals": 3,
+    "ledger_entries": 1,
+    "initial_virtual_usd": "1000.00000000",
+    "available_virtual_usd": "1000.00000000",
+    "frozen_virtual_usd": "0.00000000"
+  }
 }

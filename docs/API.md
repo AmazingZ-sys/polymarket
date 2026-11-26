@@ -15,3 +15,7 @@
 |GET|/risk、/reports、/improvements、/logs、/system、/jobs、/settings|研究与运维视图|
 
 默认 limit=50，最多 200。offset 从 0 开始。列表支持白名单排序/筛选。重复的同键写请求返回原结果，键被用于另一请求时拒绝。查询分页导出时保留顺序和过滤条件。
+
+GET /evaluations 和 /promotions 提供评审与基线变更历史。POST /evaluations 传入对照实验、候选账户、基础及加费压力回放、期间运行开支和人工证据；服务端记录当次比较的指标与状态。POST /strategy-versions/{strategy}/{version}/promote 要求相同版本的通过记录及人工理由。策略晋级不修改已有账户。
+
+来源查看可用 /reference-prices、/data-quality、/orderbooks、/trades、/datasets。GET /analytics 以账户为单位统计，NULL 为样本或分母不足。POST /risk/halt 全局暂停模拟账户，POST /risk/release 需要 reason，随后按账户恢复。完整有效字段以 OpenAPI 端点为准。
