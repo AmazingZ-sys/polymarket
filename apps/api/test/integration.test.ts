@@ -124,6 +124,18 @@ test("collection contracts, filters, OpenAPI, report idempotency", async () => {
     start_time: "2024-01-01T00:00:00Z",
     end_time: "2024-01-02T00:00:00Z",
   };
+  const datasetResponse = await post("backtest-datasets", range);
+  assert.equal(datasetResponse.status, 200);
+  const dataset = (await datasetResponse.json()).data;
+  assert.equal(dataset.status, "DATA_UNAVAILABLE");
+  assert.equal(dataset.reason, "NO_MARKETS");
+  assert.equal((await get("backtest-datasets?limit=1")).status, 200);
+  const unavailableRun = await post("backtests", {
+    ...range,
+    dataset_id: dataset.id,
+  });
+  assert.equal(unavailableRun.status, 409);
+  assert.equal((await unavailableRun.json()).error.code, "DATA_UNAVAILABLE");
   const report = await (await post("reports", range)).json();
   assert.equal(report.data.result.win_rate, null);
   assert.equal(report.data.result.closing_equity, null);

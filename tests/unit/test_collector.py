@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from pqcollector.book import Book, quality
+from pqcollector.config import CollectorConfig
 from pqcollector.markets import candidates, number, parse_market, stamp
 from pqcollector.runtime import read_connection
 
@@ -30,6 +31,42 @@ def test_independent_rules(asset, minutes, fee):
     assert m["slug"] in candidates(AT)
     assert m["rule_verified"] and m["fee_rate"] == fee and m["market_status"] == "ACTIVE"
     assert m["start_time"] != raw["startDate"]
+
+
+def test_free_collector_profile_defaults(monkeypatch):
+    monkeypatch.setenv("COLLECTOR_PROFILE", "free")
+    for name in (
+        "COLLECTOR_DISCOVERY_INTERVAL_SECONDS",
+        "COLLECTOR_UNSETTLED_LIMIT",
+        "COLLECTOR_RAW_SAMPLE_SECONDS",
+        "COLLECTOR_REFERENCE_INTERVAL_SECONDS",
+        "COLLECTOR_ENABLE_REFERENCE_TRADES",
+        "COLLECTOR_DAILY_EVENT_BUDGET_BYTES",
+        "COLLECTOR_MIN_FREE_BYTES",
+        "COLLECTOR_MAX_DISK_USAGE_BYTES",
+        "COLLECTOR_BOOK_INTERVAL_SECONDS",
+        "COLLECTOR_BOOK_TAIL_INTERVAL_SECONDS",
+        "COLLECTOR_BOOK_TAIL_SECONDS",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    config = CollectorConfig.from_env()
+    assert config.market_offsets == (0,)
+    assert config.discovery_interval_seconds == 60
+    assert config.raw_sample_seconds == 5
+    assert config.enable_reference_trades is False
+    assert config.daily_event_budget_bytes == 30_000_000
+    assert config.min_free_bytes == 2 * 1024**3
+    assert config.max_disk_usage_bytes == 15 * 1024**3
+    assert config.book_publish_interval_seconds == 2
+    assert config.deduplicate_metadata is True
+
+
+def test_full_collector_profile_preserves_defaults(monkeypatch):
+    monkeypatch.delenv("COLLECTOR_PROFILE", raising=False)
+    monkeypatch.delenv("COLLECTOR_ENABLE_REFERENCE_TRADES", raising=False)
+    config = CollectorConfig.from_env()
+    assert config.snapshot()["enable_reference_trades"] is True
+    assert config.deduplicate_metadata is False
 
 
 def test_rule_drift_and_unverified_settlement():

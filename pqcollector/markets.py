@@ -48,11 +48,11 @@ def array(value: Any) -> list:
     return result
 
 
-def candidates(at: datetime) -> list[str]:
+def candidates(at: datetime, offsets: tuple[int, ...] = (0, 1, -1, -2)) -> list[str]:
     timestamp = int(at.timestamp())
     return [
         f"{asset}-updown-{minutes}m-{timestamp // step * step + offset * step}"
-        for offset in (0, 1, -1, -2)
+        for offset in offsets
         for asset in ("btc", "eth")
         for minutes in (5, 15)
         for step in [60 * minutes]

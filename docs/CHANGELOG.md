@@ -11,6 +11,8 @@
 - 已在本机运行实际 Compose，核验就绪、登录、总览、市场、数据源、任务和 OpenAPI。隔离测试覆盖浏览器账户生命周期、并发幂等和数据库恢复。
 
 - 在独立 Docker Compose 中演练了带 49,586 条事件和 10 个 Parquet 的备份、哈希核验、虚拟资金恢复、更新与手动回滚。注入无法就绪的 Web 镜像后自动恢复旧版本。见 docs/evidence/2026-11-26/operations-smoke.md。
+- 补充 GCE 低磁盘 VM 部署剖面和按需回测流程。15 GiB 预算、留存清理、分级停写、流量观察与部署验收命令见 DEPLOYMENT.md、OPERATIONS.md 和 BACKTEST.md。
+- 增加 `COLLECTOR_PROFILE=free` 低资源采集档和回测数据集准入状态。free 档按日事件预算、15 GiB 已用空间上限与剩余空间保护降级写入，默认 `.env.example` 用于 15 GiB 部署。
 
 ## v0.1.0 正式发布
 

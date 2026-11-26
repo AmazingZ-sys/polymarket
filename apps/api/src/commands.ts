@@ -62,6 +62,14 @@ const period = z.object({
   start_time: z.iso.datetime({ offset: true }),
   end_time: z.iso.datetime({ offset: true }),
 });
+const datasetRequest = period
+  .extend({
+    assets: z.array(z.enum(["BTC", "ETH"])).min(1).max(2).default(["BTC", "ETH"]),
+    timeframes: z.array(z.union([z.literal(5), z.literal(15)])).min(1).max(2).default([5, 15]),
+    max_bytes: z.number().int().min(1048576).max(1073741824).default(536870912),
+    expires_at: z.iso.datetime({ offset: true }).optional(),
+  })
+  .strict();
 const textId = (c: Context) => id.parse(c.req.param("id"));
 const singleton = async (tx: PoolClient, sql: string, values: unknown[]) => {
   const { rows } = await tx.query(sql, values);
@@ -137,6 +145,7 @@ export const commands: Record<string, Command> = {
         initial_balance: amount.default("1000"),
         config: config.optional(),
         seed: z.number().int().default(0),
+        dataset_id: id.optional(),
       })
       .strict(),
     run: async (tx, p) => {
@@ -145,12 +154,52 @@ export const commands: Record<string, Command> = {
         Date.parse(String(p.end_time)) > Date.now()
       )
         throw new ApiError(400, "PERIOD", "请选择已结束的有效时间段");
+      if (p.dataset_id) {
+        const dataset = await singleton(
+          tx,
+          "SELECT status,start_time,end_time FROM backtest_datasets WHERE id=$1 FOR SHARE",
+          [p.dataset_id],
+        );
+        if (dataset.status !== "BACKTEST_READY")
+          throw new ApiError(409, dataset.status, `数据集状态为 ${dataset.status}`);
+        if (
+          Date.parse(String(dataset.start_time)) !== Date.parse(String(p.start_time)) ||
+          Date.parse(String(dataset.end_time)) !== Date.parse(String(p.end_time))
+        )
+          throw new ApiError(400, "DATASET_PERIOD", "回测区间必须与数据集请求一致");
+      }
       return singleton(
         tx,
-        "INSERT INTO backtest_runs(config) VALUES($1) RETURNING *",
-        [p],
+        "INSERT INTO backtest_runs(config,dataset_id) VALUES($1,$2) RETURNING *",
+        [p, p.dataset_id ?? null],
       );
     },
+  },
+  "/backtest-datasets": {
+    schema: datasetRequest,
+    run: async (tx, p, c) => {
+      const row = await singleton(
+        tx,
+        `INSERT INTO backtest_datasets(assets,timeframes,start_time,end_time,max_bytes,expires_at,requested_by)
+         VALUES(array(SELECT v FROM unnest($1::text[]) AS v ORDER BY v),
+                array(SELECT v FROM unnest($2::integer[]) AS v ORDER BY v),
+                $3,$4,$5,coalesce($6::timestamptz,now()+interval '7 days'),$7)
+         ON CONFLICT(assets,timeframes,start_time,end_time) DO UPDATE
+           SET max_bytes=excluded.max_bytes,expires_at=excluded.expires_at,requested_by=excluded.requested_by
+         RETURNING id`,
+        [p.assets, p.timeframes, p.start_time, p.end_time, p.max_bytes, p.expires_at ?? null, c.get("user").username],
+      );
+      return (
+        await singleton(tx, "SELECT pq_refresh_backtest_dataset($1) AS data", [row.id])
+      ).data;
+    },
+  },
+  "/backtest-datasets/:id/refresh": {
+    schema: z.object({}).strict(),
+    run: async (tx, _p, c) =>
+      (
+        await singleton(tx, "SELECT pq_refresh_backtest_dataset($1) AS data", [textId(c)])
+      ).data,
   },
   "/backtests/:id/cancel": {
     schema: z.object({}).strict(),

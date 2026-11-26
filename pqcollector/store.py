@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import shutil
 from contextlib import contextmanager
 from datetime import datetime
 from time import monotonic
@@ -23,6 +25,51 @@ class Store:
         self.pending: list[tuple] = []
         self.buffering = False
         self.last_flush = monotonic()
+        self.persisted_bytes = 0
+        self.daily_event_budget_bytes = 0
+        self.budget_notice_emitted = False
+        self.budget_day = now().date()
+        self.min_free_bytes = 0
+        self.max_disk_usage_bytes = 0
+        self.disk_guard_triggered = False
+        self.disk_guard_reason = "DISK_FREE_LOW"
+        self.last_disk_check = 0.0
+        self.deduplicate_metadata = False
+
+    def configure_budget(
+        self,
+        daily_event_budget_bytes: int,
+        min_free_bytes: int = 0,
+        deduplicate_metadata: bool = False,
+        max_disk_usage_bytes: int = 0,
+    ):
+        self.daily_event_budget_bytes = daily_event_budget_bytes
+        self.min_free_bytes = min_free_bytes
+        self.deduplicate_metadata = deduplicate_metadata
+        self.max_disk_usage_bytes = max_disk_usage_bytes
+        if daily_event_budget_bytes:
+            row = self.db.execute(
+                "SELECT coalesce(sum(octet_length(data::text)), 0) AS bytes "
+                "FROM engine_events WHERE persisted_at >= date_trunc('day', now())"
+            ).fetchone()
+            self.persisted_bytes = int(row["bytes"] if isinstance(row, dict) else row[0])
+
+    def _disk_has_room(self) -> bool:
+        if self.min_free_bytes <= 0 or monotonic() - self.last_disk_check < 10:
+            return not self.disk_guard_triggered
+        self.last_disk_check = monotonic()
+        try:
+            usage = shutil.disk_usage(os.getenv("ARCHIVE_DIR", "/tmp"))
+        except OSError:
+            return True
+        self.disk_guard_reason = "DISK_FREE_LOW"
+        if self.max_disk_usage_bytes and usage.used >= self.max_disk_usage_bytes:
+            self.disk_guard_reason = "DISK_USAGE_LIMIT"
+        self.disk_guard_triggered = bool(
+            (self.min_free_bytes and usage.free < self.min_free_bytes)
+            or (self.max_disk_usage_bytes and usage.used >= self.max_disk_usage_bytes)
+        )
+        return not self.disk_guard_triggered
 
     @contextmanager
     def frame(self):
@@ -54,8 +101,40 @@ class Store:
         flags=(),
         identity: Any = None,
         sequence: int | None = None,
+        persist: bool = True,
     ) -> str:
         key = digest([source, kind, market_id, identity if identity is not None else [at, data]])
+        if not persist:
+            return key
+        current_day = now().date()
+        if current_day != self.budget_day:
+            self.persisted_bytes = 0
+            self.budget_notice_emitted = False
+            self.budget_day = current_day
+        # Estimate before enqueueing. A hard budget protects a small disk even
+        # when a source suddenly becomes noisy. Essential event types remain
+        # writable so gaps and settlement evidence are never silently dropped.
+        estimate = len(str(data).encode()) + 256
+        essential = kind in {"GAP", "RESOLUTION", "METADATA", "TRADE"}
+        if not essential and not self._disk_has_room():
+            if not self.budget_notice_emitted:
+                self.budget_notice_emitted = True
+                self.gap(
+                    market_id,
+                    self.disk_guard_reason,
+                    source,
+                    {
+                        "min_free_bytes": self.min_free_bytes,
+                        "max_disk_usage_bytes": self.max_disk_usage_bytes,
+                    },
+                )
+            return key
+        if self.daily_event_budget_bytes and self.persisted_bytes + estimate > self.daily_event_budget_bytes and not essential:
+            if not self.budget_notice_emitted:
+                self.budget_notice_emitted = True
+                self.gap(market_id, "RESOURCE_BUDGET_EXCEEDED", source, {"budget_bytes": self.daily_event_budget_bytes})
+            return key
+        self.persisted_bytes += estimate
         values = (key, source, kind, market_id, at, received, now(), Jsonb(data), list(flags), sequence, kind, key)
         if self.buffering:
             self.pending.append(values)
@@ -160,7 +239,19 @@ class Store:
             flags.append("FEE_UNVERIFIED")
         if m["market_status"] == "ANOMALY":
             flags.append("MARKET_ANOMALY")
-        self.event("gamma", "METADATA", mid, received, received, m["raw"], flags, identity=m["raw"])
+        metadata_identity = m["raw"]
+        if self.deduplicate_metadata:
+            metadata_identity = {
+                "rule_version": m["rule_version"],
+                "rule_verified": m["rule_verified"],
+                "market_status": m["market_status"],
+                "accepting_orders": m["accepting_orders"],
+                "reference_price": m["reference_price"],
+                "outcome": m["outcome"],
+                "tick_size": m["tick_size"],
+                "minimum_order_size": m["minimum_order_size"],
+            }
+        self.event("gamma", "METADATA", mid, received, received, m["raw"], flags, identity=metadata_identity)
         if outcome:
             details = {
                 "verified": True,
@@ -182,11 +273,11 @@ class Store:
         m["observed_at"] = received
         return m
 
-    def unsettled(self) -> list[str]:
+    def unsettled(self, limit: int = 8) -> list[str]:
         rows = self.db.execute("""
             SELECT slug FROM markets WHERE resolved_outcome IS NULL AND end_time<now()
-            AND market_status <> 'ANOMALY' ORDER BY updated_at LIMIT 8
-        """).fetchall()
+            AND market_status <> 'ANOMALY' ORDER BY updated_at LIMIT %s
+        """, (limit,)).fetchall()
         return [r["slug"] for r in rows]
 
 

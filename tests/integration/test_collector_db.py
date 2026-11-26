@@ -104,3 +104,49 @@ def test_isolated_history_round_trip_and_manifest_validation(tmp_path):
         finally:
             for dbname in (source, target):
                 admin.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(dbname)))
+
+
+def test_backtest_dataset_request_states():
+    dsn = os.getenv("TEST_DATABASE_URL")
+    if not dsn:
+        pytest.skip("set TEST_DATABASE_URL for dataset status integration")
+    database = "pq_dataset_test_" + uuid4().hex
+    with connect(dsn) as admin:
+        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database)))
+        try:
+            scoped = make_conninfo(dsn, dbname=database)
+            migrate(scoped)
+            with connect(scoped) as db:
+                start = stamp("2026-11-26T01:00:00Z")
+                end = stamp("2026-11-26T01:05:00Z")
+                request = db.execute(
+                    """INSERT INTO backtest_datasets(assets,timeframes,start_time,end_time,requested_by)
+                    VALUES(%s,%s,%s,%s,'test') RETURNING id""",
+                    (["BTC"], [5], start, end),
+                ).fetchone()["id"]
+                row = db.execute("SELECT pq_refresh_backtest_dataset(%s) data", (request,)).fetchone()["data"]
+                assert row["status"] == "DATA_UNAVAILABLE" and row["reason"] == "NO_MARKETS"
+                db.execute(
+                    """INSERT INTO markets(market_id,condition_id,slug,title,asset,timeframe,start_time,end_time,
+                    up_token_id,down_token_id,resolution_source,settlement_rule,settlement_rule_version,
+                    rule_verified,market_status,accepting_orders,raw_metadata)
+                    VALUES('DATA','DATA','data','data','BTC',5,%s,%s,'u','d','test','test','r1',true,
+                    'ACTIVE',true,'{}')""",
+                    (start, end),
+                )
+                db.execute(
+                    """INSERT INTO engine_events(event_id,market_id,source,kind,event_time,received_at,processed_at,data)
+                    VALUES('event','DATA','test','BOOK',%s,%s,%s,'{}')""",
+                    (start, start, start),
+                )
+                row = db.execute("SELECT pq_refresh_backtest_dataset(%s) data", (request,)).fetchone()["data"]
+                assert row["status"] == "BACKTEST_READY"
+                db.execute(
+                    """INSERT INTO engine_events(event_id,market_id,source,kind,event_time,received_at,processed_at,data)
+                    VALUES('gap','DATA','test','GAP',%s,%s,%s,'{}')""",
+                    (start, start, start),
+                )
+                row = db.execute("SELECT pq_refresh_backtest_dataset(%s) data", (request,)).fetchone()["data"]
+                assert row["status"] == "DATA_INCOMPLETE" and row["reason"] == "MARKET_DATA_GAP"
+        finally:
+            admin.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(database)))

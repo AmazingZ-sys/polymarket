@@ -13,6 +13,7 @@ import websockets
 from websockets.exceptions import ConnectionClosed, InvalidHandshake
 
 from .book import Book, frame_time, quality
+from .config import CollectorConfig
 from .markets import candidates, now, number, parse_market, stamp
 from .oracle import OracleCache, licensed_stream
 from .reference import trade_tape
@@ -43,8 +44,9 @@ BOOK_FIELDS = (
 
 
 class Discovery:
-    def __init__(self, store: Store, http: httpx.AsyncClient):
+    def __init__(self, store: Store, http: httpx.AsyncClient, config: CollectorConfig | None = None):
         self.store, self.http = store, http
+        self.config = config if isinstance(config, CollectorConfig) else CollectorConfig.from_env()
         self.markets: dict[str, dict] = {}
         self.oracle = OracleCache()
         self.gate = asyncio.Semaphore(3)
@@ -77,7 +79,10 @@ class Discovery:
                 return False
 
     async def refresh(self):
-        slugs = dict.fromkeys(candidates(now()) + self.store.unsettled())
+        at = now()
+        slugs = dict.fromkeys(
+            candidates(at, self.config.market_offsets) + self.store.unsettled(self.config.unsettled_limit)
+        )
         results = await asyncio.gather(*(self.fetch(slug) for slug in slugs))
         if any(results) and False not in results:
             self.store.status("gamma", "ONLINE")
@@ -97,14 +102,27 @@ class Discovery:
 
 
 class Frames:
-    def __init__(self, store: Store, discovery: Discovery):
+    def __init__(self, store: Store, discovery: Discovery, config: CollectorConfig | None = None):
         self.store, self.discovery = store, discovery
+        candidate = config if isinstance(config, CollectorConfig) else getattr(discovery, "config", None)
+        self.config = candidate if isinstance(candidate, CollectorConfig) else CollectorConfig.from_env()
         self.books: dict[str, Book] = {}
         self.ticks: dict[str, str] = {}
         self.last_output: dict[str, float] = {}
         self.full_times: dict[str, datetime] = {}
         self.epoch = str(uuid4())
         self.last_health = 0.0
+        self.last_raw: dict[str, float] = {}
+
+    def _persist_raw(self, market_id: str, event_type: str, current: float) -> bool:
+        if self.config.raw_sample_seconds == 0 or event_type in {"book", "last_trade_price", "tick_size_change"}:
+            self.last_raw[market_id] = current
+            return True
+        previous = self.last_raw.get(market_id)
+        if previous is None or current - previous >= self.config.raw_sample_seconds:
+            self.last_raw[market_id] = current
+            return True
+        return False
 
     def accept(self, frame: dict, received: datetime, market: dict):
         mid = market["market_id"]
@@ -112,7 +130,8 @@ class Frames:
         event_time = frame_time(frame)
         # Exact retransmissions hash to the original raw row. Derived snapshots
         # reference it, including initial snapshots used to recover after a gap.
-        raw_key = self.store.event("clob_ws", "RAW", mid, event_time, received, frame)
+        raw_persisted = self._persist_raw(mid, event_type, time.monotonic())
+        raw_key = self.store.event("clob_ws", "RAW", mid, event_time, received, frame, persist=raw_persisted)
         inputs: dict[str, list | None] = {}
         if event_type == "book":
             inputs[frame["asset_id"]] = None
@@ -162,10 +181,12 @@ class Frames:
             book.apply(frame, changes)
             if changes is None:
                 self.full_times[token] = event_time
-            # Raw changes are retained at native cadence. Publish at most four
-            # executable depth images per token per second plus full resets.
+            # Reconstructed books are published at the configured cadence.
+            # Full resets are always emitted so a replay can recover a book.
             current = time.monotonic()
-            if changes is not None and current - self.last_output.get(token, 0) < 0.25:
+            tail = (stamp(market["end_time"]) - received).total_seconds() <= self.config.book_tail_seconds
+            interval = self.config.book_tail_interval_seconds if tail else self.config.book_publish_interval_seconds
+            if changes is not None and current - self.last_output.get(token, 0) < interval:
                 continue
             self.last_output[token] = current
             data = {k: market.get(k) for k in BOOK_FIELDS}
@@ -174,7 +195,7 @@ class Frames:
                 token_id=token,
                 side="UP" if token == market["up_token_id"] else "DOWN",
                 tick_size=self.ticks.get(token, market["tick_size"]),
-                raw_event_id=raw_key,
+                raw_event_id=raw_key if raw_persisted else None,
             )
             data.update(self.discovery.oracle.enrich(market, received))
             self.store.event(
@@ -192,8 +213,10 @@ class Frames:
             self.last_health = time.monotonic()
 
 
-async def read_connection(store: Store, discovery: Discovery, subscriptions: dict):
-    frames = Frames(store, discovery)
+async def read_connection(
+    store: Store, discovery: Discovery, subscriptions: dict, config: CollectorConfig | None = None
+):
+    frames = Frames(store, discovery, config)
     tokens = sorted(t for m in subscriptions.values() for t in (m["up_token_id"], m["down_token_id"]))
     async with websockets.connect(WS, open_timeout=12, close_timeout=2, ping_interval=None, max_queue=256) as ws:
         await ws.send(json.dumps({"type": "market", "assets_ids": tokens}))
@@ -243,7 +266,7 @@ async def stream_market(store: Store, discovery: Discovery, condition: str):
     while market := discovery.subscriptions().get(condition):
         started = time.monotonic()
         try:
-            reason = await read_connection(store, discovery, {condition: market})
+            reason = await read_connection(store, discovery, {condition: market}, discovery.config)
             if reason == "MARKET_CLOSED":
                 return
         except (ConnectionClosed, InvalidHandshake, TimeoutError, OSError, ValueError) as exc:
@@ -288,11 +311,12 @@ async def stream(store: Store, discovery: Discovery):
 async def discover_forever(discovery: Discovery):
     while True:
         await discovery.refresh()
-        await asyncio.sleep(20)
+        await asyncio.sleep(discovery.config.discovery_interval_seconds)
 
 
-async def references(store: Store, http: httpx.AsyncClient):
-    delay = 10
+async def references(store: Store, http: httpx.AsyncClient, config: CollectorConfig | None = None):
+    config = config or CollectorConfig.from_env()
+    delay = config.reference_interval_seconds
     while True:
         try:
             res = await http.get(KRAKEN, params={"pair": "XBTUSD,ETHUSD"})
@@ -325,7 +349,7 @@ async def references(store: Store, http: httpx.AsyncClient):
                         ["SOURCE_TIME_UNKNOWN"],
                     )
                 store.status("kraken", "ONLINE")
-            delay = 10
+            delay = config.reference_interval_seconds
         except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
             status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
             store.status("kraken", "UNAVAILABLE", str(exc)[:240])
@@ -341,6 +365,14 @@ async def references(store: Store, http: httpx.AsyncClient):
 
 
 async def run(store: Store, seconds=None):
+    config = CollectorConfig.from_env()
+    store.configure_budget(
+        config.daily_event_budget_bytes,
+        config.min_free_bytes,
+        config.deduplicate_metadata,
+        config.max_disk_usage_bytes,
+    )
+    LOG.info("collector configuration %s", json.dumps(config.snapshot(), sort_keys=True))
     mode = store.db.execute("SELECT current_setting('polyquant.mode',true) AS mode").fetchone()
     if mode and mode["mode"] == "history":
         raise ValueError("Historical databases only accept offline research")
@@ -350,19 +382,26 @@ async def run(store: Store, seconds=None):
     for row in store.db.execute("SELECT market_id FROM markets WHERE end_time>now() AND accepting_orders"):
         store.gap(row["market_id"], "COLLECTOR_RESTART")
     async with httpx.AsyncClient(timeout=10) as client:
-        discovery = Discovery(store, client)
+        discovery = Discovery(store, client, config)
         await discovery.refresh()
         tasks = [
             asyncio.create_task(c)
             for c in (
                 discover_forever_after_delay(discovery),
                 stream(store, discovery),
-                references(store, client),
-                trade_tape(store, client, "BTC", "XBTUSD"),
-                trade_tape(store, client, "ETH", "ETHUSD"),
+                references(store, client, config),
                 licensed_stream(store, discovery.oracle),
             )
         ]
+        if config.enable_reference_trades:
+            tasks.extend(
+                (
+                    asyncio.create_task(trade_tape(store, client, "BTC", "XBTUSD")),
+                    asyncio.create_task(trade_tape(store, client, "ETH", "ETHUSD")),
+                )
+            )
+        else:
+            LOG.info("collector reference trade tape disabled by profile=%s", config.profile)
         try:
             done, _ = await asyncio.wait(tasks, timeout=seconds, return_when=asyncio.FIRST_EXCEPTION)
             for task in done:
@@ -374,5 +413,5 @@ async def run(store: Store, seconds=None):
 
 
 async def discover_forever_after_delay(discovery):
-    await asyncio.sleep(20)
+    await asyncio.sleep(discovery.config.discovery_interval_seconds)
     await discover_forever(discovery)
