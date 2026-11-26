@@ -52,7 +52,8 @@ class Store:
                 "SELECT coalesce(sum(octet_length(data::text)), 0) AS bytes "
                 "FROM engine_events WHERE persisted_at >= date_trunc('day', now())"
             ).fetchone()
-            self.persisted_bytes = int(row["bytes"] if isinstance(row, dict) else row[0])
+            if row is not None:
+                self.persisted_bytes = int(row["bytes"] if isinstance(row, dict) else row[0])
 
     def _disk_has_room(self) -> bool:
         if self.min_free_bytes <= 0 or monotonic() - self.last_disk_check < 10:

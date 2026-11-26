@@ -126,7 +126,7 @@ class Frames:
 
     def accept(self, frame: dict, received: datetime, market: dict):
         mid = market["market_id"]
-        event_type = frame.get("event_type")
+        event_type = str(frame.get("event_type") or "")
         event_time = frame_time(frame)
         # Exact retransmissions hash to the original raw row. Derived snapshots
         # reference it, including initial snapshots used to recover after a gap.

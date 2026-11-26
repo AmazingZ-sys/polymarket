@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import cast
 
 
 def _int(name: str, raw: str, minimum: int = 1) -> int:
@@ -64,7 +65,7 @@ class CollectorConfig:
         profile = os.getenv("COLLECTOR_PROFILE", "full").strip().lower()
         if profile not in {"full", "free"}:
             raise ValueError("COLLECTOR_PROFILE must be full or free")
-        defaults = {
+        defaults: dict[str, object] = {
             "discovery": 60 if profile == "free" else 20,
             "unsettled": 4 if profile == "free" else 8,
             "offsets": (0,) if profile == "free" else (0, 1, -1, -2),
@@ -82,7 +83,7 @@ class CollectorConfig:
             "min_free_bytes": 2 * 1024**3 if profile == "free" else 0,
             "max_disk_usage_bytes": 15 * 1024**3 if profile == "free" else 0,
         }
-        enable_trades = defaults["trades"]
+        enable_trades = bool(defaults["trades"])
         if os.getenv("COLLECTOR_ENABLE_REFERENCE_TRADES", "").strip():
             enable_trades = _bool("COLLECTOR_ENABLE_REFERENCE_TRADES", os.environ["COLLECTOR_ENABLE_REFERENCE_TRADES"])
         return cls(
@@ -95,7 +96,7 @@ class CollectorConfig:
                 "COLLECTOR_UNSETTLED_LIMIT",
                 _env("COLLECTOR_UNSETTLED_LIMIT", defaults["unsettled"]),
             ),
-            market_offsets=defaults["offsets"],
+            market_offsets=cast(tuple[int, ...], defaults["offsets"]),
             raw_sample_seconds=_float(
                 "COLLECTOR_RAW_SAMPLE_SECONDS",
                 _env("COLLECTOR_RAW_SAMPLE_SECONDS", defaults["raw_sample"]),
