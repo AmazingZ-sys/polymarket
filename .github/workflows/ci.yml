@@ -11,7 +11,7 @@ concurrency:
   group: verify-${{ github.ref }}
   cancel-in-progress: false
 env:
-  UV_VERSION: '0.11.6'
+  UV_VERSION: '0.13.4'
   DOCKER_BUILD_RECORD_UPLOAD: 'false'
 
 jobs:
