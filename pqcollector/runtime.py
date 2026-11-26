@@ -14,6 +14,7 @@ from websockets.exceptions import ConnectionClosed, InvalidHandshake
 
 from .book import Book, frame_time, quality
 from .config import CollectorConfig
+from .disk import DiskCapacityError
 from .markets import candidates, now, number, parse_market, stamp
 from .oracle import OracleCache, licensed_stream
 from .reference import trade_tape
@@ -379,6 +380,48 @@ async def run(store: Store, seconds=None):
     lock = store.db.execute("SELECT pg_try_advisory_lock(7386101) AS ok").fetchone()
     if not lock or not lock["ok"]:
         raise RuntimeError("Another collector is active")
+    deadline = asyncio.timeout(seconds)
+    try:
+        async with deadline:
+            await supervise_collection(store, config)
+    except TimeoutError:
+        if not deadline.expired():
+            raise
+
+
+async def supervise_collection(store: Store, config: CollectorConfig):
+    paused_at = None
+    pause_reason = None
+    while True:
+        try:
+            store.disk.check()
+            if paused_at is not None:
+                store.gap(
+                    None, "COLLECTION_RESUMED", "collector", {"paused_at": paused_at.isoformat(), "reason": pause_reason}
+                )
+                LOG.info("collection resumed after %s", pause_reason)
+                paused_at = pause_reason = None
+            capture = asyncio.create_task(collect_sources(store, config))
+            try:
+                while not capture.done():
+                    await asyncio.wait({capture}, timeout=store.disk.check_seconds if store.disk.enabled else None)
+                    store.disk.check()
+                capture.result()
+                return
+            finally:
+                capture.cancel()
+                await asyncio.gather(capture, return_exceptions=True)
+        except DiskCapacityError as exc:
+            if paused_at is None:
+                paused_at = now()
+                pause_reason = str(exc)
+                LOG.warning("collection paused; feed connections closed: %s", exc)
+                # A written coverage gap on recovery replaces uncommitted frames.
+                store.pending.clear()
+            await asyncio.sleep(store.disk.check_seconds)
+
+
+async def collect_sources(store: Store, config: CollectorConfig):
     for row in store.db.execute("SELECT market_id FROM markets WHERE end_time>now() AND accepting_orders"):
         store.gap(row["market_id"], "COLLECTOR_RESTART")
     async with httpx.AsyncClient(timeout=10) as client:
@@ -403,7 +446,7 @@ async def run(store: Store, seconds=None):
         else:
             LOG.info("collector reference trade tape disabled by profile=%s", config.profile)
         try:
-            done, _ = await asyncio.wait(tasks, timeout=seconds, return_when=asyncio.FIRST_EXCEPTION)
+            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
             for task in done:
                 task.result()
         finally:

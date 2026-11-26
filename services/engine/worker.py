@@ -106,18 +106,6 @@ def initialize_backtest(conn, run):
     end = iso(cfg["end_time"]) if cfg.get("end_time") else run["created_at"]
     if start >= end:
         raise ValueError("start_time must precede end_time")
-    if run.get("dataset_id"):
-        dataset = first(
-            conn,
-            "SELECT status,start_time,end_time FROM backtest_datasets WHERE id=%s FOR SHARE",
-            (run["dataset_id"],),
-        )
-        if not dataset:
-            raise ValueError("DATA_UNAVAILABLE")
-        if dataset["status"] != "BACKTEST_READY":
-            raise ValueError(dataset["status"])
-        if dataset["start_time"] != start or dataset["end_time"] != end:
-            raise ValueError("DATASET_PERIOD")
     boundary = first(
         conn,
         """SELECT coalesce(min(seq),0) first,coalesce(max(seq),0) last,count(*) event_count

@@ -19,3 +19,8 @@
 GitHub Actions 在 cca13fc 完成验证、版本计算、三个应用镜像的双架构构建、安全扫描和 Release 发布。匿名访问三个 0.1.0 OCI 索引均返回 HTTP 200，摘要与 Release Notes 一致。[发布版本](https://github.com/AmazingZ-sys/polymarket/releases/tag/v0.1.0) · [CI/CD 运行](https://github.com/AmazingZ-sys/polymarket/actions/runs/45745176063)
 
 本机 Docker 部署通过就绪、登录、账本、备份和隔离恢复检查。固定研究窗口内 23,154 条真实事件的两次回放一致，模拟成交为 0。研究状态为 INSUFFICIENT_DATA。现场边界见 KNOWN_ISSUES.md。
+
+## v0.2.0 部署包
+
+- Release 附带固定版本的镜像部署包。新 VM 只下载 Compose 配置与脚本，安装时在本机生成密码，采集器默认待机。
+- 回测数据集在提交与启动时检查有效期，基础覆盖包含请求范围内市场两侧合格盘口。已登记的经济引擎摘要沿用 v0.1.0。

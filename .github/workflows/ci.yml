@@ -48,6 +48,25 @@ jobs:
       - run: pnpm lint && pnpm typecheck && pnpm build && pnpm --filter @polyquant/api test
       - run: pnpm --filter @polyquant/web exec playwright install --with-deps chromium
       - run: pnpm --filter @polyquant/web exec playwright test console.spec.ts
+      - name: Verify image-only deployment bundle in an empty directory
+        run: |
+          target=$(mktemp -d)
+          archive="$RUNNER_TEMP/polyquant-deploy.tar.gz"
+          python3 scripts/ci/deployment-bundle.py 9.8.7 ghcr.io/Example/PolyQuant "$archive"
+          tar -xzf "$archive" -C "$target"
+          cd "$target"
+          test ! -e .env
+          scripts/install.sh
+          docker compose config --format json | jq -e '
+            .services.collector.deploy.replicas == 0 and
+            .services.collector.image == "ghcr.io/example/polyquant-worker:9.8.7" and
+            .services.api.image == "ghcr.io/example/polyquant-api:9.8.7" and
+            .services.web.image == "ghcr.io/example/polyquant-web:9.8.7"' >/dev/null
+          cp .env "$target/previous-env"
+          tar -xzf "$archive"
+          scripts/install.sh
+          cmp .env "$target/previous-env"
+          rm -rf "$target"
       - name: Scan dependency locks and tracked source
         run: |
           scripts/ci/install-trivy.sh

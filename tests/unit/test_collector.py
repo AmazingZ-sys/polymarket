@@ -179,3 +179,75 @@ def test_licensed_oracle_provenance_and_causal_opening():
         cache.ingest(store, frame, opening)
     cache.clear()
     assert cache.enrich(m, opening) == {}
+
+
+def test_disk_guard_reserve_hysteresis_and_missing_mount(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from pqcollector.disk import DiskCapacityError, DiskGuard
+
+    gib = 1024**3
+    samples = iter([14 * gib, 14 * gib - gib // 8, 14 * gib - gib // 2])
+    guard = DiskGuard(tmp_path, 0, 15 * gib)
+    monkeypatch.setattr("pqcollector.disk.monotonic", iter([5, 10, 15, 20]).__next__)
+    monkeypatch.setattr(
+        "pqcollector.disk.shutil.disk_usage",
+        lambda path: SimpleNamespace(used=next(samples), free=20 * gib),
+    )
+    with pytest.raises(DiskCapacityError, match="DISK_USAGE_LIMIT"):
+        guard.check()
+    with pytest.raises(DiskCapacityError, match="DISK_USAGE_LIMIT"):
+        guard.check()
+    guard.check()
+
+    def unavailable(_):
+        raise FileNotFoundError
+
+    monkeypatch.setattr("pqcollector.disk.shutil.disk_usage", unavailable)
+    with pytest.raises(DiskCapacityError, match="DISK_STATUS_UNAVAILABLE"):
+        guard.check()
+
+
+def test_disk_guard_pause_closes_feeds_and_resumes(monkeypatch):
+    from pqcollector.disk import DiskCapacityError
+    from pqcollector.runtime import supervise_collection
+
+    store = MagicMock()
+    store.disk.enabled = True
+    store.disk.check_seconds = 0.001
+    calls = []
+    reasons = iter(["startup pause", None, "running pause", "running pause", None, None])
+
+    def check():
+        if reason := next(reasons, None):
+            raise DiskCapacityError(reason)
+
+    async def capture(store, config):
+        calls.append("open")
+        if len(calls) == 1:
+            try:
+                await asyncio.Future()
+            finally:
+                calls.append("close")
+
+    store.disk.check.side_effect = check
+    monkeypatch.setattr("pqcollector.runtime.collect_sources", capture)
+    asyncio.run(asyncio.wait_for(supervise_collection(store, CollectorConfig.from_env()), 1))
+    assert calls == ["open", "close", "open"]
+    assert [item.args[-1]["reason"] for item in store.gap.call_args_list] == ["startup pause", "running pause"]
+    assert store.pending.clear.call_count == 2
+
+
+def test_archive_guard_accounts_for_pending_file_size(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from pqcollector.disk import DiskCapacityError, DiskGuard
+
+    gib = 1024**3
+    guard = DiskGuard(tmp_path, 0, 15 * gib)
+    monkeypatch.setattr(
+        "pqcollector.disk.shutil.disk_usage", lambda path: SimpleNamespace(used=14 * gib - 1024, free=8 * gib)
+    )
+    guard.check()
+    with pytest.raises(DiskCapacityError, match="DISK_USAGE_LIMIT"):
+        guard.check(write_bytes=1024)

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-import shutil
 from contextlib import contextmanager
 from datetime import datetime
+from pathlib import Path
 from time import monotonic
 from typing import Any
 
@@ -11,6 +11,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from .disk import DiskGuard
 from .markets import digest, now
 
 EVENT_INSERT = """INSERT INTO engine_events(event_id,source,kind,market_id,event_time,received_at,
@@ -29,11 +30,7 @@ class Store:
         self.daily_event_budget_bytes = 0
         self.budget_notice_emitted = False
         self.budget_day = now().date()
-        self.min_free_bytes = 0
-        self.max_disk_usage_bytes = 0
-        self.disk_guard_triggered = False
-        self.disk_guard_reason = "DISK_FREE_LOW"
-        self.last_disk_check = 0.0
+        self.disk = DiskGuard(Path(os.getenv("ARCHIVE_DIR", "/data/parquet")))
         self.deduplicate_metadata = False
 
     def configure_budget(
@@ -44,9 +41,8 @@ class Store:
         max_disk_usage_bytes: int = 0,
     ):
         self.daily_event_budget_bytes = daily_event_budget_bytes
-        self.min_free_bytes = min_free_bytes
+        self.disk = DiskGuard(self.disk.directory, min_free_bytes, max_disk_usage_bytes)
         self.deduplicate_metadata = deduplicate_metadata
-        self.max_disk_usage_bytes = max_disk_usage_bytes
         if daily_event_budget_bytes:
             row = self.db.execute(
                 "SELECT coalesce(sum(octet_length(data::text)), 0) AS bytes "
@@ -54,23 +50,6 @@ class Store:
             ).fetchone()
             if row is not None:
                 self.persisted_bytes = int(row["bytes"] if isinstance(row, dict) else row[0])
-
-    def _disk_has_room(self) -> bool:
-        if self.min_free_bytes <= 0 or monotonic() - self.last_disk_check < 10:
-            return not self.disk_guard_triggered
-        self.last_disk_check = monotonic()
-        try:
-            usage = shutil.disk_usage(os.getenv("ARCHIVE_DIR", "/tmp"))
-        except OSError:
-            return True
-        self.disk_guard_reason = "DISK_FREE_LOW"
-        if self.max_disk_usage_bytes and usage.used >= self.max_disk_usage_bytes:
-            self.disk_guard_reason = "DISK_USAGE_LIMIT"
-        self.disk_guard_triggered = bool(
-            (self.min_free_bytes and usage.free < self.min_free_bytes)
-            or (self.max_disk_usage_bytes and usage.used >= self.max_disk_usage_bytes)
-        )
-        return not self.disk_guard_triggered
 
     @contextmanager
     def frame(self):
@@ -86,6 +65,7 @@ class Store:
 
     def flush(self):
         if self.pending:
+            self.disk.check()
             with self.db.transaction(), self.db.cursor() as cursor:
                 cursor.executemany(EVENT_INSERT, self.pending)
             self.pending.clear()
@@ -107,6 +87,7 @@ class Store:
         key = digest([source, kind, market_id, identity if identity is not None else [at, data]])
         if not persist:
             return key
+        self.disk.check()
         current_day = now().date()
         if current_day != self.budget_day:
             self.persisted_bytes = 0
@@ -117,19 +98,6 @@ class Store:
         # writable so gaps and settlement evidence are never silently dropped.
         estimate = len(str(data).encode()) + 256
         essential = kind in {"GAP", "RESOLUTION", "METADATA", "TRADE"}
-        if not essential and not self._disk_has_room():
-            if not self.budget_notice_emitted:
-                self.budget_notice_emitted = True
-                self.gap(
-                    market_id,
-                    self.disk_guard_reason,
-                    source,
-                    {
-                        "min_free_bytes": self.min_free_bytes,
-                        "max_disk_usage_bytes": self.max_disk_usage_bytes,
-                    },
-                )
-            return key
         if self.daily_event_budget_bytes and self.persisted_bytes + estimate > self.daily_event_budget_bytes and not essential:
             if not self.budget_notice_emitted:
                 self.budget_notice_emitted = True
@@ -145,6 +113,7 @@ class Store:
         return key
 
     def status(self, source: str, status: str, reason: str | None = None):
+        self.disk.check()
         if not self.buffering:
             self.flush()
         at = now()
@@ -163,6 +132,7 @@ class Store:
         self.event(source, "GAP", market_id, at, at, {"reason": reason, "raw": raw}, [reason])
 
     def metadata(self, m: dict, received: datetime) -> dict:
+        self.disk.check()
         mid = m["market_id"]
         previous = self.db.execute(
             """

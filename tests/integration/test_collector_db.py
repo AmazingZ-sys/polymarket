@@ -9,6 +9,7 @@ import polars as pl
 import pytest
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
+from psycopg.types.json import Jsonb
 
 from pqcollector.archive import archive, checksum, compact_raw, raw_event
 from pqcollector.markets import parse_market, stamp
@@ -139,8 +140,57 @@ def test_backtest_dataset_request_states():
                     VALUES('event','DATA','test','BOOK',%s,%s,%s,'{}')""",
                     (start, start, start),
                 )
-                row = db.execute("SELECT pq_refresh_backtest_dataset(%s) data", (request,)).fetchone()["data"]
-                assert row["status"] == "BACKTEST_READY"
+
+                def refresh(request_id=request):
+                    return db.execute("SELECT pq_refresh_backtest_dataset(%s) data", (request_id,)).fetchone()[
+                        "data"
+                    ]
+
+                assert refresh()["reason"] == "MISSING_QUALIFIED_BOOK_PAIR"
+                base_book = {
+                    "asset": "BTC",
+                    "timeframe": 5,
+                    "start_time": start.isoformat(),
+                    "end_time": end.isoformat(),
+                    "rule_verified": True,
+                    "rule_version": "r1",
+                    "accepting_orders": True,
+                    "tick_size": "0.01",
+                    "minimum_order_size": "5",
+                    "fee_rate": "0.05",
+                    "fee_exponent": 1,
+                    "asks": [["0.50", "20"]],
+                    "bids": [["0.48", "20"]],
+                }
+
+                def add_book(side, token, flags=()):
+                    db.execute(
+                        """INSERT INTO engine_events(event_id,market_id,source,kind,event_time,received_at,
+                        processed_at,data,quality_flags) VALUES(%s,'DATA','test','BOOK',%s,%s,%s,%s,%s)""",
+                        (
+                            str(uuid4()),
+                            start,
+                            start,
+                            start,
+                            Jsonb({**base_book, "side": side, "token_id": token}),
+                            list(flags),
+                        ),
+                    )
+
+                add_book("UP", "u")
+                add_book("DOWN", "u")
+                add_book("DOWN", "d", ["STALE_EVENT"])
+                row = refresh()
+                assert row["status"] == "DATA_INCOMPLETE" and row["book_count"] == 1
+                add_book("DOWN", "d")
+                row = refresh()
+                assert row["status"] == "BACKTEST_READY" and row["book_market_count"] == 1
+                broader = db.execute(
+                    """INSERT INTO backtest_datasets(assets,timeframes,start_time,end_time,requested_by)
+                    VALUES('{BTC,ETH}','{5}',%s,%s,'test') RETURNING id""",
+                    (start, end),
+                ).fetchone()["id"]
+                assert refresh(broader)["reason"] == "MISSING_MARKET_SCOPE"
                 db.execute(
                     """INSERT INTO engine_events(event_id,market_id,source,kind,event_time,received_at,processed_at,data)
                     VALUES('gap','DATA','test','GAP',%s,%s,%s,'{}')""",

@@ -39,6 +39,9 @@ services:
     restart: "no"
   collector:
     <<: *worker
+    deploy:
+      replicas: ${COLLECTOR_REPLICAS:-1}
+    volumes: [archives:/data/parquet:ro]
     environment:
       <<: *engine-env
       DATABASE_URL: postgresql://pq_collector:${PQ_COLLECTOR_PASSWORD:?run scripts/install.sh}@postgres:5432/polyquant
@@ -71,6 +74,9 @@ services:
     environment:
       <<: *engine-env
       DATABASE_URL: postgresql://pq_ops:${PQ_OPS_PASSWORD:?run scripts/install.sh}@postgres:5432/polyquant
+      COLLECTOR_PROFILE: ${COLLECTOR_PROFILE:-full}
+      COLLECTOR_MIN_FREE_BYTES: ${COLLECTOR_MIN_FREE_BYTES:-}
+      COLLECTOR_MAX_DISK_USAGE_BYTES: ${COLLECTOR_MAX_DISK_USAGE_BYTES:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       WEBHOOK_URL: ${WEBHOOK_URL:-}

@@ -10,6 +10,7 @@ from psycopg import sql
 from psycopg.conninfo import make_conninfo
 from psycopg.rows import dict_row
 
+from services.engine.worker import backtest_step
 from services.migrate import migrate
 from services.ops.worker import run_job
 
@@ -61,6 +62,36 @@ def test_role_grants_and_private_auth_columns(monkeypatch, tmp_path):
                 )
                 with pytest.raises(psycopg.errors.InsufficientPrivilege):
                     db.execute("UPDATE paper_accounts SET available_balance=0")
+                db.execute("RESET ROLE")
+                # This synthetic request exercises admission with the production role matrix.
+                dataset = db.execute("""INSERT INTO backtest_datasets(
+                    assets,timeframes,start_time,end_time,requested_by,status)
+                    VALUES ('{BTC}','{5}',now()-interval '1 day',now(),'test','BACKTEST_READY')
+                    RETURNING id""").fetchone()["id"]
+                submit = """INSERT INTO backtest_runs(dataset_id,config) SELECT id,
+                    jsonb_build_object('start_time',start_time,'end_time',end_time) FROM backtest_datasets
+                    WHERE id=%s RETURNING id"""
+                ready = db.execute(submit, (dataset,)).fetchone()["id"]
+                db.execute("RESET ROLE")
+                db.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(renamed["pq_engine"])))
+                assert backtest_step(db) == 1
+                assert (
+                    db.execute("SELECT status FROM backtest_runs WHERE id=%s", (ready,)).fetchone()["status"]
+                    == "COMPLETED"
+                )
+                db.execute("RESET ROLE")
+                db.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(renamed["pq_api"])))
+                stale = db.execute(submit, (dataset,)).fetchone()["id"]
+                db.execute(
+                    "UPDATE backtest_datasets SET expires_at=now()-interval '1 second' WHERE id=%s", (dataset,)
+                )
+                with pytest.raises(psycopg.errors.RaiseException, match="REQUEST_EXPIRED"):
+                    db.execute(submit, (dataset,))
+                db.execute("RESET ROLE")
+                db.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(renamed["pq_engine"])))
+                assert backtest_step(db) == 1
+                expired = db.execute("SELECT status,result FROM backtest_runs WHERE id=%s", (stale,)).fetchone()
+                assert expired["status"] == "FAILED" and "REQUEST_EXPIRED" in expired["result"]["error"]
                 db.execute("RESET ROLE")
                 db.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(renamed["pq_ops"])))
                 run_job(db, "ledger_check")

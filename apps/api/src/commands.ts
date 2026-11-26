@@ -157,9 +157,11 @@ export const commands: Record<string, Command> = {
       if (p.dataset_id) {
         const dataset = await singleton(
           tx,
-          "SELECT status,start_time,end_time FROM backtest_datasets WHERE id=$1 FOR SHARE",
+          "SELECT status,start_time,end_time,assets,timeframes,expires_at<=now() AS expired FROM backtest_datasets WHERE id=$1 FOR SHARE",
           [p.dataset_id],
         );
+        if (dataset.expired)
+          throw new ApiError(409, "DATA_UNAVAILABLE", "数据集请求已过期");
         if (dataset.status !== "BACKTEST_READY")
           throw new ApiError(409, dataset.status, `数据集状态为 ${dataset.status}`);
         if (
@@ -167,6 +169,15 @@ export const commands: Record<string, Command> = {
           Date.parse(String(dataset.end_time)) !== Date.parse(String(p.end_time))
         )
           throw new ApiError(400, "DATASET_PERIOD", "回测区间必须与数据集请求一致");
+        const options = (p.config ?? {}) as z.infer<typeof config>;
+        if (options.assets?.some((a) => !dataset.assets.includes(a)) ||
+            options.timeframes?.some((t) => !dataset.timeframes.includes(t)))
+          throw new ApiError(400, "DATASET_SCOPE", "策略范围超出已检查的数据集");
+        p.config = {
+          ...options,
+          assets: options.assets ?? dataset.assets,
+          timeframes: options.timeframes ?? dataset.timeframes,
+        };
       }
       return singleton(
         tx,
@@ -178,11 +189,14 @@ export const commands: Record<string, Command> = {
   "/backtest-datasets": {
     schema: datasetRequest,
     run: async (tx, p, c) => {
+      if (Date.parse(String(p.start_time)) >= Date.parse(String(p.end_time)) ||
+          Date.parse(String(p.end_time)) > Date.now())
+        throw new ApiError(400, "PERIOD", "请选择已结束的有效时间段");
       const row = await singleton(
         tx,
         `INSERT INTO backtest_datasets(assets,timeframes,start_time,end_time,max_bytes,expires_at,requested_by)
-         VALUES(array(SELECT v FROM unnest($1::text[]) AS v ORDER BY v),
-                array(SELECT v FROM unnest($2::integer[]) AS v ORDER BY v),
+         VALUES(array(SELECT DISTINCT v FROM unnest($1::text[]) AS v ORDER BY v),
+                array(SELECT DISTINCT v FROM unnest($2::integer[]) AS v ORDER BY v),
                 $3,$4,$5,coalesce($6::timestamptz,now()+interval '7 days'),$7)
          ON CONFLICT(assets,timeframes,start_time,end_time) DO UPDATE
            SET max_bytes=excluded.max_bytes,expires_at=excluded.expires_at,requested_by=excluded.requested_by

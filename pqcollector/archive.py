@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import tempfile
 from pathlib import Path
 
 import polars as pl
+
+from .config import CollectorConfig
+from .disk import DiskGuard
 
 
 def checksum(path: Path) -> str:
@@ -18,6 +22,9 @@ def archive(db, directory: Path, batch_size: int = 5000) -> list[dict]:
     if not 1 <= batch_size <= 10000:
         raise ValueError("batch size outside 1..10000")
     directory.mkdir(parents=True, exist_ok=True)
+    config = CollectorConfig.from_env()
+    disk = DiskGuard(directory, config.min_free_bytes, config.max_disk_usage_bytes)
+    disk.check()
     results: list[dict] = []
     if not db.execute("SELECT pg_try_advisory_lock(7386102) AS ok").fetchone()["ok"]:
         raise RuntimeError("Another archive writer is active")
@@ -46,7 +53,14 @@ def archive(db, directory: Path, batch_size: int = 5000) -> list[dict]:
                     temp = Path(tmp.name)
                 try:
                     frame = pl.DataFrame(rows, schema_overrides={"market_id": pl.String, "sequence": pl.Int64})
-                    frame.write_parquet(temp, compression="zstd")
+                    if disk.enabled:
+                        # Check the exact compressed size before writing this batch to the volume.
+                        with io.BytesIO() as buffer:
+                            frame.write_parquet(buffer, compression="zstd")
+                            disk.check(write_bytes=buffer.tell())
+                            temp.write_bytes(buffer.getbuffer())
+                    else:
+                        frame.write_parquet(temp, compression="zstd")
                     sha = checksum(temp)
                     if file.exists():
                         if checksum(file) != sha:

@@ -22,3 +22,5 @@
 PQ10 已发布 v0.1.0。完整 CI 与双架构镜像发布见 [运行记录](https://github.com/AmazingZ-sys/polymarket/actions/runs/45745176063)。本机另经匿名 Registry API 核对三个镜像的版本索引及摘要。
 
 GCE 低磁盘 VM 的 15 GiB 运维剖面、留存清理、分级停写、流量观察和按需回测流程已记录在 DEPLOYMENT.md、OPERATIONS.md 与 BACKTEST.md。该剖面用于短时间采集和小窗口回放，长期运行仍需外部归档与更大持久盘。
+
+免克隆部署包已经验证版本、镜像前缀、零采集副本、重复安装保留凭证，以及隔离 PostgreSQL 的升级和回测。Google VM 首次安装后的占用、吞吐与账单由部署现场测量。
