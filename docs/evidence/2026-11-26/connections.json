@@ -1,0 +1,32 @@
+[
+  {
+    "endpoint": "https://clob.polymarket.com/book?token_id=19298140577863065577832316307026538094311528647797718019384013654702684299333",
+    "received_at": "2026-11-26T01:23:31.709545+00:00",
+    "error": "HTTP Error 403: Forbidden",
+    "status": 403
+  },
+  {
+    "endpoint": "https://api.binance.com/api/v3/ticker/bookTicker?symbol=BTCUSDT",
+    "received_at": "2026-11-26T01:23:31.710210+00:00",
+    "error": "HTTP Error 451: ",
+    "status": 451
+  },
+  {
+    "endpoint": "https://api.exchange.coinbase.com/products/BTC-USD/ticker",
+    "received_at": "2026-11-26T01:23:31.710761+00:00",
+    "error": "HTTP Error 403: Forbidden",
+    "status": 403
+  },
+  {
+    "endpoint": "https://data-api.polymarket.com/v2/trades?condition=0x283a608818f6d030dd6e0a0346b47f2b8d23facda61cab73e9b53078ff1ed6cc&limit=1",
+    "received_at": "2026-11-26T01:23:31.748466+00:00",
+    "error": "HTTP Error 403: Forbidden",
+    "status": 403
+  },
+  {
+    "endpoint": "wss://ws-subscriptions-clob.polymarket.com/ws/market",
+    "received_at": "2026-11-26T01:23:36.313264+00:00",
+    "status": "FRAME_RECEIVED",
+    "sample": "[{\"market\":\"0x283a608818f6d030dd6e0a0346b47f2b8d23facda61cab73e9b53078ff1ed6cc\",\"asset_id\":\"19298140577863065577832316307026538094311528647797718019384013654702684299333\",\"timestamp\":\"1795656216177\",\"hash\":\"b9e50bc04559401bb36cbe668497c00c13b5d76a\",\"bids\":[{\"price\":\"0.01\",\"size\":\"4599.04\"},{\"price\":\"0.02\",\"size\":\"2366.01\"},{\"price\":\"0.03\",\"size\":\"2228.84\"},{\"price\":\"0.04\",\"size\":\"4931.7\"},{\"price\":\"0.05\",\"size\":\"4303\"},{\"price\":\"0.06\",\"size\":\"1874.87\"},{\"price\":\"0.07\",\"size\":\"2950.39\"},{\"price\":\"0.08\",\"size\":\"2936.69\"},{\"price\":\"0.09\",\"size\":\"3050.81\"},{\"price\":\"0.1\",\"size\":\"2937.09\"},{\"price\":\"0.11\",\"size\":\"1753.1\"},{\"price\":\"0.12\",\"size\":\"1687.33\"},{\"price\":\"0.13\",\"size\":\"1521.42\"},{\"price\":\"0.14\",\"size\":\"347.91\"},{\"price\":\"0.15\",\"size\":\"806.2\"},{\"price\":\"0.16\",\"size\":\"359.18\"},{\"price\":\"0.17\",\"size\":\"198.5\"},{\"price\":\"0.18\",\"size\":\"213.45\"},{\"price\":\"0.19\",\"size\":\"188.93\"},{\"price\":\"0.2\",\"size\":\"931.9\"},{\"price\":\"0.21\",\"size\":\"275.9\"},{\"price\":\"0.22\",\"size\":\"125.1\"},{\"price\":\"0.23\",\"size\":\"129.19\"},{\"price\":\"0.24\",\"size\":\"123.49\"},{\"price\":\"0.25\",\"size\":\"122.9\"},{\"price\":\"0.26\",\"size\":\"277.4\"},{\"price\":\"0.27\",\"size\":\"121.79\"},{\"price\":\"0.28\",\"size\":\"121.3\"},{\"price\":\"0.29\",\"size\":\"125.9\"},{\"price\":\"0.3\",\"size\":\"120.5\"},{\"price\":\"0.31\",\"size\":\"270.1\"},{\"price\":\"0.32\",\"size\":\"94"
+  }
+]

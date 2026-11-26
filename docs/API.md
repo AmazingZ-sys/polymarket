@@ -1,0 +1,17 @@
+# 管理接口
+
+前缀 /api/v1。GET /healthz 和 /readyz 位于根。会话认证使用同源 HttpOnly cookie；管理员写入需 Idempotency-Key，登录、退出除外。金额字段使用十进制字符串。列表为 {data: [], meta: {limit, offset, total}}，单个对象为 {data: ...}，错误为 {error: {code, message}}。GET /api/v1/openapi.json 获取可机器读取的路径。
+
+|方法|路径（省略前缀）|用途|
+|---|---|---|
+|POST、GET、POST|/auth/login、/auth/me、/auth/logout|username、password 换取定时会话，查询身份、注销|
+|GET|/dashboard、/events|汇总与 refresh 事件流|
+|GET|/markets、/market-events、/data-sources、/opportunities|实际采集和信号，按 market_id 筛选事件|
+|GET、POST|/paper-accounts|列表和创建。name、initial_balance、mode、strategy_id、strategy_version、config|
+|GET、POST|/paper-accounts/{id}、/paper-accounts/{id}/{action}|详情及 start、pause、resume、stop、archive、clone|
+|GET|/paper-orders、/paper-fills、/paper-positions、/settlements、/ledger、/equity|account_id 过滤|
+|GET|/strategies、/strategy-versions、/experiments、/attributions、/analytics|策略、实验及结果|
+|GET、POST|/backtests、/backtests/{id}/cancel|回放与取消|
+|GET|/risk、/reports、/improvements、/logs、/system、/jobs、/settings|研究与运维视图|
+
+默认 limit=50，最多 200。offset 从 0 开始。列表支持白名单排序/筛选。重复的同键写请求返回原结果，键被用于另一请求时拒绝。查询分页导出时保留顺序和过滤条件。
