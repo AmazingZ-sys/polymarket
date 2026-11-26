@@ -19,3 +19,9 @@
 Chainlink 直连报告需按供应商授权取数。当前文档将 RTDS 集成导向 PolyBolt，TWAP 要求平台认证和 Chainlink provider key。项目内无钱包签名。未获得的报告保持缺失，不用外部 spot 价格重构官方值。[Chainlink Data Streams](https://docs.chain.link/data-streams) · [Polymarket 实时流](https://docs.polymarket.com/market-data/realtime-data.md)
 
 公共行情也受服务条款和授权范围约束，采集成功无法确认商用再分发权。当前数据集第三方再分发授权 UNKNOWN。部署方根据实际地区、用途和各自许可配置来源。禁止绕过地域或认证要求。Binance 和 Coinbase 均为参考行情，须保留交易对、价格源及陈旧度。[Polymarket 条款](https://polymarket.com/tos) · [地区规则](https://docs.polymarket.com/api-reference/geoblock.md) · [Binance Spot](https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints) · [Coinbase ticker](https://docs.cdp.coinbase.com/api-reference/exchange-api/rest-api/products/get-product-ticker)
+
+Kraken 单独提供公共 BTC/USD、ETH/USD 参考数据。本机同一请求取得两对真实行情 HTTP 200。采集器保留最新成交价、最近成交量与买卖报价，ticker 没有源时间戳，因此标记 SOURCE_TIME_UNKNOWN。短周期研究应结合质量标记；供应商的再分发授权须单独核实。[实测数据](evidence/2026-11-26/kraken.json) · [Kraken 产品定义](https://docs.kraken.com/api-reference/market-data/get-ticker-information)
+
+可选的 PolyBolt 适配器仅在服务端具备既有 CLOB 数据访问凭证和已授权的 Chainlink key 时连接。环境变量为 POLYBOLT_API_KEY、POLYBOLT_API_SECRET、POLYBOLT_PASSPHRASE 和 CHAINLINK_API_KEY。向官方 WSS 完成 auth，再订阅 price.crypto.twap，逐条核对 source、symbol、window_seconds、seq 与 full_accuracy_value。来源不符、断线或序号缺口会清空缓存。绝不把订阅初始历史快照提前到收到之前用于决策。此连接在本机缺少授权，实网验证状态 UNVERIFIED，离线契约校验见测试。[认证与数据帧](https://docs.polymarket.com/api-reference/live-data/overview.md) · [机器可读协议](https://ws-live-v2.polymarket.com/asyncapi.json)
+
+Kraken 的公开成交接口按币种维护独立 cursor，事务记录已接收的成交、成交 ID、采集进度。滚动 60 秒观测期的相邻成交对数收益平方和开方给出未年化的已实现波动；同时保存样本数和覆盖秒数。冷启动样本不足时保留真实覆盖。补充现场验证抓取了 207 笔成交和 4 条窗口统计。[Kraken 逐笔成交](https://docs.kraken.com/api-reference/market-data/get-recent-trades)

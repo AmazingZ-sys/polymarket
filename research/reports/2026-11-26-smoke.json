@@ -1,0 +1,249 @@
+{
+  "time_basis": "UTC",
+  "observed_start": "2026-11-26T01:43:01.390274+00:00",
+  "observed_end": "2026-11-26T01:45:57.953347+00:00",
+  "data_origin": "Native public Polymarket Gamma/CLOB and Kraken observations, bounded local acceptance capture",
+  "research_status": "INSUFFICIENT_DATA",
+  "observations": [
+    {
+      "kind": "BOOK",
+      "count": 2312
+    },
+    {
+      "kind": "GAP",
+      "count": 48
+    },
+    {
+      "kind": "METADATA",
+      "count": 26
+    },
+    {
+      "kind": "RAW",
+      "count": 20666
+    },
+    {
+      "kind": "REFERENCE",
+      "count": 22
+    },
+    {
+      "kind": "RESOLUTION",
+      "count": 5
+    },
+    {
+      "kind": "TRADE",
+      "count": 75
+    }
+  ],
+  "source_markets": [
+    {
+      "asset": "BTC",
+      "timeframe": 5,
+      "n": 5
+    },
+    {
+      "asset": "BTC",
+      "timeframe": 15,
+      "n": 5
+    },
+    {
+      "asset": "ETH",
+      "timeframe": 5,
+      "n": 5
+    },
+    {
+      "asset": "ETH",
+      "timeframe": 15,
+      "n": 5
+    }
+  ],
+  "quality": [
+    {
+      "flag": "ConnectionResetError",
+      "n": 4
+    },
+    {
+      "flag": "INVALID_BOOK",
+      "n": 19
+    },
+    {
+      "flag": "MARKET_ANOMALY",
+      "n": 2
+    },
+    {
+      "flag": "MARKET_FETCH_ERROR",
+      "n": 3
+    },
+    {
+      "flag": "SOURCE_TIME_UNKNOWN",
+      "n": 22
+    },
+    {
+      "flag": "STALE_EVENT",
+      "n": 1117
+    },
+    {
+      "flag": "SUBSCRIPTION_RESET",
+      "n": 8
+    },
+    {
+      "flag": "TimeoutError",
+      "n": 14
+    }
+  ],
+  "paper_smoke": {
+    "id": "d2a78fa5-03ae-4b49-a246-1c27ee2ae018",
+    "name": "S00 public feed acceptance",
+    "mode": "PAPER",
+    "status": "RISK_HALTED",
+    "strategy_id": "S00",
+    "initial_balance": "1000.00000000",
+    "available_balance": "1000.00000000",
+    "frozen_balance": "0E-8",
+    "realized_pnl": "0E-8",
+    "equity": "1000.00000000",
+    "fees": "0E-8",
+    "started_at": "2026-11-26 01:43:10.115627+00:00",
+    "ledger_consistent": true,
+    "signals": 2,
+    "fills": 0,
+    "ledger_rows": 1,
+    "history": [
+      {
+        "status": "CREATED",
+        "reason": "",
+        "created_at": "2026-11-26 01:42:30.250188+00:00"
+      },
+      {
+        "status": "STARTING",
+        "reason": "",
+        "created_at": "2026-11-26 01:42:30.420234+00:00"
+      },
+      {
+        "status": "RUNNING",
+        "reason": "NEW_VERIFIED_BOOK",
+        "created_at": "2026-11-26 01:43:10.109067+00:00"
+      },
+      {
+        "status": "RISK_HALTED",
+        "reason": "MARKET_DATA_GAP",
+        "created_at": "2026-11-26 01:43:10.996736+00:00"
+      }
+    ]
+  },
+  "archives": [
+    {
+      "version": "events-00000000000000000001-00000000000000005027",
+      "sha256": "ae596a7179f1431356c5abbb9163e0911ce5a3097fddf5eb9902e1ca97b78232",
+      "event_count": 5000
+    },
+    {
+      "version": "events-00000000000000005028-00000000000000010049",
+      "sha256": "96e404e8ff63c9b2be782693504a7c0fac2db97df163b9cfe6ecefb5976ba229",
+      "event_count": 5000
+    },
+    {
+      "version": "events-00000000000000010050-00000000000000015066",
+      "sha256": "c4ffb70787d75d9fdd2a3afcd8a7250fb0a47be024306bce5c40b61aa46b2c97",
+      "event_count": 5000
+    },
+    {
+      "version": "events-00000000000000015067-00000000000000020075",
+      "sha256": "4e6913fa2e822b6483f9cde3615fb616e56e4e219863adb05f5f1ddfecf195e0",
+      "event_count": 5000
+    },
+    {
+      "version": "events-00000000000000020076-00000000000000023229",
+      "sha256": "ba84bdee898026c3362e1f19edaa83fc704c10231a85665d91c5aaa1a4d522c1",
+      "event_count": 3154
+    }
+  ],
+  "replay_config": {
+    "start_time": "2026-11-26T01:43:01.390274+00:00",
+    "end_time": "2026-11-26T01:45:57.953347+00:00",
+    "strategy_id": "S01",
+    "strategy_version": "1.0.0",
+    "initial_balance": "1000",
+    "seed": 17,
+    "config": {
+      "simulation_model": "conservative-v1",
+      "strategies": [
+        {
+          "strategy_id": "S02",
+          "strategy_version": "1.0.0"
+        },
+        {
+          "strategy_id": "S03",
+          "strategy_version": "1.0.0"
+        },
+        {
+          "strategy_id": "S04",
+          "strategy_version": "1.0.0"
+        }
+      ]
+    }
+  },
+  "replay_result": {
+    "fees": "0E-8",
+    "seed": 17,
+    "fills": 0,
+    "equity": "1000.00000000",
+    "net_pnl": "0E-8",
+    "partial": 0,
+    "signals": 16,
+    "end_time": "2026-11-26T01:45:57.953347+00:00",
+    "unfilled": 0,
+    "code_hash": "afd072c9d198533dbc25903007de0c37d6cb6c50baf14689d5d321b75dcd16fb",
+    "data_hash": "fdacb8e0e3129aceb1a8a11b2d0411a54e4840a6083c9b2d6a8db1607ab9540b",
+    "start_time": "2026-11-26T01:43:01.390274+00:00",
+    "validation": "INSUFFICIENT_DATA",
+    "config_hash": "4cd62a91a36b684851fa7099a046214b28ae4862ca11228c9285b2299406eacf",
+    "event_count": 2488,
+    "tail_strata": [
+      {
+        "asset": "ETH",
+        "markets": 1,
+        "timeframe": "15",
+        "observations": 1,
+        "rule_version": "95a6365e05c6dd633924bc541188f2073547bd4dc544d239d9898995013418d6",
+        "window_group": "OUTSIDE_TAIL",
+        "oracle_coverage": "UNVERIFIED"
+      },
+      {
+        "asset": "ETH",
+        "markets": 1,
+        "timeframe": "5",
+        "observations": 1,
+        "rule_version": "538bab24523f29518405ff430f28c61989aab568f44471da2ad4d9126b04b4c1",
+        "window_group": "OUTSIDE_TAIL",
+        "oracle_coverage": "UNVERIFIED"
+      }
+    ],
+    "event_counts": {
+      "GAP": 48,
+      "BOOK": 2312,
+      "TRADE": 75,
+      "METADATA": 26,
+      "REFERENCE": 22,
+      "RESOLUTION": 5
+    },
+    "max_drawdown": "0",
+    "walk_forward": [],
+    "settled_markets": 0,
+    "cross_asset_reference": {
+      "source": "kraken",
+      "quantity": "paired log returns",
+      "correlation": 0.8480353591458011,
+      "matched_returns": 10
+    },
+    "mean_pnl_daily_block_ci": null,
+    "market_probability_calibration": {
+      "ece": null,
+      "brier": null,
+      "samples": 0,
+      "log_loss": null,
+      "reliability": []
+    }
+  },
+  "replications_with_identical_results": 2,
+  "generated_at_utc": "2026-11-26T01:52:36.187242+00:00"
+}

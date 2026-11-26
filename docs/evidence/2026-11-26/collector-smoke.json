@@ -1,0 +1,120 @@
+{
+  "kind": "REAL_MARKET_DATA_COLLECTOR_SMOKE",
+  "observations": {
+    "first_received": "2026-11-26 01:44:51.136101+00:00",
+    "last_received": "2026-11-26 01:45:50.098795+00:00",
+    "events": 5230,
+    "book": 633,
+    "clean_book": 176,
+    "raw": 4518,
+    "trades": 23,
+    "gaps": 22,
+    "book_age_p50": 7.834362,
+    "book_age_p95": 21.293378399999998
+  },
+  "counts": [
+    {
+      "kind": "BOOK",
+      "rows": 1844
+    },
+    {
+      "kind": "GAP",
+      "rows": 90
+    },
+    {
+      "kind": "METADATA",
+      "rows": 39
+    },
+    {
+      "kind": "RAW",
+      "rows": 18119
+    },
+    {
+      "kind": "REFERENCE",
+      "rows": 28
+    },
+    {
+      "kind": "RESOLUTION",
+      "rows": 6
+    },
+    {
+      "kind": "TRADE",
+      "rows": 72
+    }
+  ],
+  "markets": [
+    {
+      "asset": "BTC",
+      "timeframe": 5,
+      "n": 6,
+      "resolved": 3
+    },
+    {
+      "asset": "BTC",
+      "timeframe": 15,
+      "n": 5,
+      "resolved": 1
+    },
+    {
+      "asset": "ETH",
+      "timeframe": 5,
+      "n": 6,
+      "resolved": 1
+    },
+    {
+      "asset": "ETH",
+      "timeframe": 15,
+      "n": 5,
+      "resolved": 1
+    }
+  ],
+  "database_bytes_including_indexes": 26091520,
+  "files": [
+    {
+      "version": "events-00000000000000000001-00000000000000005084",
+      "first_seq": 1,
+      "last_seq": 5084,
+      "event_count": 5000,
+      "sha256": "6276924df4ef377485513a40e4ed2c54d2064fbf3e1cbf4e4c39105988b92122",
+      "file_path": "events-00000000000000000001-00000000000000005084.parquet",
+      "bytes": 666675
+    },
+    {
+      "version": "events-00000000000000005085-00000000000000010088",
+      "first_seq": 5085,
+      "last_seq": 10088,
+      "event_count": 5000,
+      "sha256": "15cf91a5ad3297334c8045ce66d92da3933bf83b28ebb1d4d239c394a92a05b0",
+      "file_path": "events-00000000000000005085-00000000000000010088.parquet",
+      "bytes": 596787
+    },
+    {
+      "version": "events-00000000000000010089-00000000000000015068",
+      "first_seq": 10089,
+      "last_seq": 15068,
+      "event_count": 4968,
+      "sha256": "8b125473b2e1baabc50dc4c1acec4b00e501547846ce97e3c995555c3ad2fea2",
+      "file_path": "events-00000000000000010089-00000000000000015068.parquet",
+      "bytes": 601808
+    },
+    {
+      "version": "events-00000000000000015069-00000000000000020085",
+      "first_seq": 15069,
+      "last_seq": 20085,
+      "event_count": 5000,
+      "sha256": "5de8c2f4eabc8e327f63305a2b47bcc0d4ffda3fad0a012d574110bf8abcd280",
+      "file_path": "events-00000000000000015069-00000000000000020085.parquet",
+      "bytes": 641804
+    },
+    {
+      "version": "events-00000000000000020086-00000000000000020322",
+      "first_seq": 20086,
+      "last_seq": 20322,
+      "event_count": 230,
+      "sha256": "90ae43180d140b1650e5a8d7cf9ab6a5ba592058144aa27514730598f080f9aa",
+      "file_path": "events-00000000000000020086-00000000000000020322.parquet",
+      "bytes": 39401
+    }
+  ],
+  "notes": "Consecutive bounded runs; wall time between runs is not covered. Sizes reflect only observed samples; no profitability evidence. Parquet row count and SHA-256 re-verified after export."
+}
