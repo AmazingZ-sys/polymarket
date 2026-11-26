@@ -11,3 +11,9 @@
 - 已在本机运行实际 Compose，核验就绪、登录、总览、市场、数据源、任务和 OpenAPI。隔离测试覆盖浏览器账户生命周期、并发幂等和数据库恢复。
 
 - 在独立 Docker Compose 中演练了带 49,586 条事件和 10 个 Parquet 的备份、哈希核验、虚拟资金恢复、更新与手动回滚。注入无法就绪的 Web 镜像后自动恢复旧版本。见 docs/evidence/2026-11-26/operations-smoke.md。
+
+## v0.1.0 正式发布
+
+GitHub Actions 在 cca13fc 完成验证、版本计算、三个应用镜像的双架构构建、安全扫描和 Release 发布。匿名访问三个 0.1.0 OCI 索引均返回 HTTP 200，摘要与 Release Notes 一致。[发布版本](https://github.com/AmazingZ-sys/polymarket/releases/tag/v0.1.0) · [CI/CD 运行](https://github.com/AmazingZ-sys/polymarket/actions/runs/45745176063)
+
+本机 Docker 部署通过就绪、登录、账本、备份和隔离恢复检查。固定研究窗口内 23,154 条真实事件的两次回放一致，模拟成交为 0。研究状态为 INSUFFICIENT_DATA。现场边界见 KNOWN_ISSUES.md。

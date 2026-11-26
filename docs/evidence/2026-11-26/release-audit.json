@@ -59,5 +59,29 @@
       "tag": "v7.4.0",
       "commit": "c3c9e263c25d99ce0380d002d59b67737d91b0dc"
     }
+  },
+  "local_image_scan": {
+    "cli": "Trivy 0.76.2",
+    "database_updated_at": "2026-11-26T01:07:25.616332095Z",
+    "database_oci_layer": "sha256:64fdea8663e7921a3725e6c10a1691bbbc6ad85ab11a751164109903e4f25071",
+    "architecture": "linux/amd64",
+    "scope": "fixable HIGH and CRITICAL findings in the final runtime filesystem",
+    "images": {
+      "api": {
+        "image_id": "sha256:b2ceb48dd7b490ae9ed3a113229d5c9d0bc0d86c7e15cd4a55833d3bcfa35edc",
+        "fixable_high": 0,
+        "fixable_critical": 0
+      },
+      "web": {
+        "image_id": "sha256:c31a653624d782e9e71019926713cfff62e6d87d7e7047416698071624127ff0",
+        "fixable_high": 0,
+        "fixable_critical": 0
+      },
+      "worker": {
+        "image_id": "sha256:852109a1cdb6bad9dc502ce64c88fc63ced41b078884ec10a3981bcdc0246ec5",
+        "fixable_high": 0,
+        "fixable_critical": 0
+      }
+    }
   }
 }

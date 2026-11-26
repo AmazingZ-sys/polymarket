@@ -11,3 +11,5 @@
 Vue、Hono、Python 采集/模拟、回测和维护进程已联通。数据库采用 migrations + runtime-grants.sql，四个运行角色与迁移账户分开。用户启动 PAPER 后仍需等候合格实时盘口。本机软件验收与首份真实结果见 research/reports/2026-11-26-smoke.md，研究判定 INSUFFICIENT_DATA。归档目录、数据库备份和 .env 只在本机，测试使用独立库或临时 schema。
 
 发行流程位于 .github/workflows/ci.yml。后续修改经济模型时同步处理 engine/build.py 的内容摘要和新策略版本迁移。事件导入只写新历史研究库，打开回测前核验归档哈希。
+
+公开发布 v0.1.0 的源提交是 cca13fc，三个 GHCR 镜像均有 linux/amd64 及 linux/arm64 manifest。版本摘要和 CI 链接见 CHANGELOG.md。部署验收与真实交易研究相互独立，长期样本量仍是当前阻塞项。
