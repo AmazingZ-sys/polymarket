@@ -1,0 +1,160 @@
+name: Verify and release
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  UV_VERSION: '0.11.6'
+  DOCKER_BUILD_RECORD_UPLOAD: 'false'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: {POSTGRES_DB: pq_test, POSTGRES_PASSWORD: test_only}
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 3s --health-retries 15
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+    env:
+      DATABASE_URL: postgresql://postgres:test_only@127.0.0.1:5432/pq_test
+      TEST_DATABASE_URL: postgresql://postgres:test_only@127.0.0.1:5432/pq_test
+      REDIS_URL: redis://127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: {node-version: 22, cache: pnpm}
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: '3.12'
+          enable-cache: true
+      - run: pnpm install --frozen-lockfile && uv sync --frozen
+      - run: uv run --frozen python -m services.migrate && uv run --frozen python -m services.migrate
+      - run: uv run --frozen ruff check . && uv run --frozen mypy pqcollector services && uv run --frozen pytest -q
+      - run: pnpm lint && pnpm typecheck && pnpm build && pnpm --filter @polyquant/api test
+      - run: pnpm --filter @polyquant/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @polyquant/web exec playwright test console.spec.ts
+      - name: Scan dependency locks and tracked source
+        run: |
+          scripts/ci/install-trivy.sh
+          mkdir "$RUNNER_TEMP/source-scan"
+          git archive HEAD | tar -xf - -C "$RUNNER_TEMP/source-scan"
+          "$RUNNER_TEMP/pq-trivy/trivy" fs --scanners vuln,secret --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$RUNNER_TEMP/source-scan"
+      - run: scripts/install.sh && scripts/start.sh && scripts/healthcheck.sh
+      - name: Chromium lifecycle test against Compose
+        env: {PQ_TEST_ISOLATED_STACK: '1', PQ_UI_URL: 'http://127.0.0.1:8080'}
+        run: |
+          # The isolated CI deployment has a generated, job-local administrator password.
+          PQ_TEST_ADMIN_PASSWORD=$(awk -F= '$1=="ADMIN_PASSWORD" {print $2}' .env)
+          echo "::add-mask::$PQ_TEST_ADMIN_PASSWORD"
+          export PQ_TEST_ADMIN_PASSWORD
+          pnpm --filter @polyquant/web exec playwright test stack.spec.ts
+      - run: scripts/restore.sh "$(scripts/backup.sh)"
+      - name: Scan locally built application images
+        run: |
+          for component in api worker web; do
+            version=$(awk -F= '$1=="APP_VERSION" {print $2}' .env)
+            trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 "polyquant-$component:$version"
+          done
+
+  version:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.calc.outputs.version }}
+      prefix: ${{ steps.calc.outputs.prefix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {fetch-depth: 0, persist-credentials: false}
+      - id: calc
+        run: |
+          if [[ $(git ls-remote origin refs/heads/main | cut -f1) == "$GITHUB_SHA" ]]; then
+            echo "version=$(python3 scripts/release-version.py)" >> "$GITHUB_OUTPUT"
+          fi
+          echo "prefix=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+  images:
+    needs: version
+    if: needs.version.outputs.version != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    permissions: {contents: read, packages: write}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: api, file: node, target: api}
+          - {name: web, file: node, target: web}
+          - {name: worker, file: worker, target: ''}
+    env:
+      IMAGE: ${{ needs.version.outputs.prefix }}-${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with: {registry: ghcr.io, username: '${{ github.actor }}', password: '${{ github.token }}'}
+      - name: Reuse the same image manifests when retrying a release
+        id: existing
+        run: |
+          if digest=$(docker buildx imagetools inspect "$IMAGE:sha-$GITHUB_SHA" --format '{{.Manifest.Digest}}' 2>/dev/null); then
+            [[ $digest =~ ^sha256:[a-f0-9]{64}$ ]]
+            echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: build
+        if: steps.existing.outputs.digest == ''
+        with:
+          context: .
+          file: infrastructure/docker/${{ matrix.file }}.Dockerfile
+          target: ${{ matrix.target }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.IMAGE }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+      - run: scripts/ci/install-trivy.sh
+      - name: Verify architectures and scan immutable manifests
+        env:
+          DIGEST: ${{ steps.existing.outputs.digest || steps.build.outputs.digest }}
+        run: |
+          for arch in amd64 arm64; do
+            docker buildx imagetools inspect "$IMAGE@$DIGEST" --raw | jq --arg arch "$arch" -e '.manifests[] | select(.platform.os=="linux" and .platform.architecture==$arch)' > /dev/null
+            trivy image --image-src remote --platform "linux/$arch" --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 "$IMAGE@$DIGEST"
+          done
+
+  release:
+    needs: [version, images]
+    runs-on: ubuntu-latest
+    permissions: {contents: write, packages: write}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {fetch-depth: 0, persist-credentials: false}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with: {registry: ghcr.io, username: '${{ github.actor }}', password: '${{ github.token }}'}
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          IMAGE_PREFIX: ${{ needs.version.outputs.prefix }}
+        run: scripts/ci/publish-release.sh

@@ -1,0 +1,70 @@
+{
+  "uid": "pq-research",
+  "title": "PolyQuant Research",
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1,
+      "title": "事件序列",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "pq-prom"
+      },
+      "targets": [
+        {
+          "expr": "polyquant_last_event_sequence",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "w": 8,
+        "h": 8,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": 2,
+      "title": "运行模拟盘",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "pq-prom"
+      },
+      "targets": [
+        {
+          "expr": "polyquant_running_accounts",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "w": 8,
+        "h": 8,
+        "x": 8,
+        "y": 0
+      }
+    },
+    {
+      "id": 3,
+      "title": "异常来源",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "pq-prom"
+      },
+      "targets": [
+        {
+          "expr": "polyquant_sources_non_ok",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "w": 8,
+        "h": 8,
+        "x": 16,
+        "y": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily UTC backup of PolyQuant
+
+[Timer]
+OnCalendar=*-*-* 02:10:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

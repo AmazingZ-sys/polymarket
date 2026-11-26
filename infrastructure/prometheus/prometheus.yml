@@ -1,0 +1,5 @@
+global:
+  scrape_interval: 30s
+scrape_configs:
+  - job_name: polyquant
+    static_configs: [{targets: ['api:3000']}]

@@ -1,0 +1,108 @@
+name: polyquant
+x-base: &base
+  restart: unless-stopped
+  logging: {driver: json-file, options: {max-size: 10m, max-file: "4"}}
+x-engine-env: &engine-env
+  ARCHIVE_DIR: /data/parquet
+  TZ: UTC
+x-worker: &worker
+  <<: *base
+  image: ${IMAGE_PREFIX:-polyquant}-worker:${APP_VERSION:-0.1.0}
+  environment: *engine-env
+  depends_on:
+    migrate: {condition: service_completed_successfully}
+services:
+  postgres:
+    <<: *base
+    image: postgres:17-alpine
+    environment: {POSTGRES_USER: pq, POSTGRES_DB: polyquant, POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?run scripts/install.sh}"}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: {test: [CMD-SHELL, "pg_isready -U pq -d polyquant"], interval: 5s, timeout: 3s, retries: 20}
+  redis:
+    <<: *base
+    image: redis:7-alpine
+    command: [redis-server, --maxmemory, 96mb, --maxmemory-policy, allkeys-lru]
+    healthcheck: {test: [CMD, redis-cli, ping], interval: 5s, timeout: 3s, retries: 15}
+  migrate:
+    image: ${IMAGE_PREFIX:-polyquant}-worker:${APP_VERSION:-0.1.0}
+    environment:
+      <<: *engine-env
+      DATABASE_URL: postgresql://pq:${POSTGRES_PASSWORD:?run scripts/install.sh}@postgres:5432/polyquant
+      PQ_API_PASSWORD: ${PQ_API_PASSWORD:?run scripts/install.sh}
+      PQ_ENGINE_PASSWORD: ${PQ_ENGINE_PASSWORD:?run scripts/install.sh}
+      PQ_COLLECTOR_PASSWORD: ${PQ_COLLECTOR_PASSWORD:?run scripts/install.sh}
+      PQ_OPS_PASSWORD: ${PQ_OPS_PASSWORD:?run scripts/install.sh}
+    volumes: [archives:/data/parquet]
+    depends_on:
+      postgres: {condition: service_healthy}
+    command: [python, -m, services.migrate]
+    restart: "no"
+  collector:
+    <<: *worker
+    environment:
+      <<: *engine-env
+      DATABASE_URL: postgresql://pq_collector:${PQ_COLLECTOR_PASSWORD:?run scripts/install.sh}@postgres:5432/polyquant
+      POLYBOLT_API_KEY: ${POLYBOLT_API_KEY:-}
+      POLYBOLT_API_SECRET: ${POLYBOLT_API_SECRET:-}
+      POLYBOLT_PASSPHRASE: ${POLYBOLT_PASSPHRASE:-}
+      CHAINLINK_API_KEY: ${CHAINLINK_API_KEY:-}
+
+    command: [python, -m, pqcollector]
+  engine:
+    <<: *worker
+    environment:
+      <<: *engine-env
+      DATABASE_URL: postgresql://pq_engine:${PQ_ENGINE_PASSWORD:?run scripts/install.sh}@postgres:5432/polyquant
+    command: [python, -m, services.engine.worker]
+  ops:
+    <<: *worker
+    environment:
+      <<: *engine-env
+      DATABASE_URL: postgresql://pq_ops:${PQ_OPS_PASSWORD:?run scripts/install.sh}@postgres:5432/polyquant
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      WEBHOOK_URL: ${WEBHOOK_URL:-}
+    volumes: [archives:/data/parquet]
+    command: [python, -m, services.ops.worker]
+    healthcheck: {test: [CMD, python, -c, "import os,time; assert time.time()-os.stat('/tmp/pq-ops-alive').st_mtime<120"], interval: 30s, timeout: 5s, retries: 5}
+  api:
+    <<: *base
+    image: ${IMAGE_PREFIX:-polyquant}-api:${APP_VERSION:-0.1.0}
+    environment:
+      <<: *engine-env
+      DATABASE_URL: postgresql://pq_api:${PQ_API_PASSWORD:?run scripts/install.sh}@postgres:5432/polyquant
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?run scripts/install.sh}
+      VIEWER_USERNAME: ${VIEWER_USERNAME:-viewer}
+      VIEWER_PASSWORD: ${VIEWER_PASSWORD:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://127.0.0.1:8080}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    healthcheck: {test: [CMD, node, -e, "fetch('http://localhost:3000/readyz').then(r=>process.exit(+!r.ok)).catch(()=>process.exit(1))"], interval: 8s, timeout: 5s, retries: 12}
+  web:
+    <<: *base
+    image: ${IMAGE_PREFIX:-polyquant}-web:${APP_VERSION:-0.1.0}
+    ports: ["127.0.0.1:${WEB_PORT:-8080}:8080"]
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck: {test: [CMD-SHELL, "wget -qO /dev/null http://127.0.0.1:8080/readyz"], interval: 10s, timeout: 4s, retries: 10}
+  prometheus:
+    <<: *base
+    profiles: [monitoring]
+    image: prom/prometheus:v3.5.0
+    volumes: [./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro,prometheus:/prometheus]
+  grafana:
+    <<: *base
+    profiles: [monitoring]
+    image: grafana/grafana:12.2.0
+    ports: ["127.0.0.1:3300:3000"]
+    environment: {GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_PASSWORD:-}", GF_USERS_ALLOW_SIGN_UP: "false"}
+    volumes: [grafana:/var/lib/grafana,./infrastructure/grafana:/etc/grafana/provisioning:ro]
+volumes:
+  pgdata:
+  archives:
+  prometheus:
+  grafana:

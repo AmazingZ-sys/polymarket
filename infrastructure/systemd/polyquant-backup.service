@@ -1,0 +1,10 @@
+[Unit]
+Description=PolyQuant database and archive backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/polyquant
+ExecStart=/opt/polyquant/scripts/backup.sh
+UMask=0077

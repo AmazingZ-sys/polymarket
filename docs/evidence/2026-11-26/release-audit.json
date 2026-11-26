@@ -1,0 +1,63 @@
+{
+  "date_utc": "2026-11-26",
+  "source_secret_scan": {
+    "scanner": "Trivy 0.76.2 macOS amd64",
+    "archive_sha256": "e08bb9ea449ecf66c6bfb03cbb8697c503ff33d35fc585c9747e3eaeb7ed4c7b",
+    "files": "tracked and nonignored workspace publication candidate",
+    "findings": 0
+  },
+  "npm": {
+    "command": "pnpm audit",
+    "package_count": 287,
+    "findings_after_update": 0,
+    "updated": "@hono/node-server 2.1.11"
+  },
+  "python": {
+    "command": "pip-audit --no-deps --disable-pip over uv export --frozen --no-dev",
+    "packages_on_test_host": 21,
+    "findings": 0
+  },
+  "workflow_lint": "actionlint 1.7.12 passed",
+  "semver_checks": [
+    "first release",
+    "existing tag",
+    "documentation only",
+    "patch",
+    "minor",
+    "breaking footer"
+  ],
+  "official_action_pins": {
+    "astral-sh/setup-uv": {
+      "tag": "v10.4.0",
+      "commit": "1db35dd8eee11c5894872e0b383ae6c406cf738d"
+    },
+    "actions/setup-node": {
+      "tag": "v7.1.0",
+      "commit": "949feb2413d6458794dcd2491c4babbbce0c15c1"
+    },
+    "pnpm/action-setup": {
+      "tag": "v6.1.1",
+      "commit": "73e46992e05b19abd31f2f3c20e0e7370d762115"
+    },
+    "docker/setup-qemu-action": {
+      "tag": "v4.4.0",
+      "commit": "99012661954931238ded8c8b007157a8430204e1"
+    },
+    "actions/checkout": {
+      "tag": "v7.0.1",
+      "commit": "3d3c42e5aac5ba805825da76410c181273ba90b1"
+    },
+    "docker/setup-buildx-action": {
+      "tag": "v4.4.1",
+      "commit": "f87e5991a6d7451dcb8d9637bfbc97413f497069"
+    },
+    "docker/login-action": {
+      "tag": "v4.8.0",
+      "commit": "8aa5831fb8d48d8f76594c7ddde61ae58019f550"
+    },
+    "docker/build-push-action": {
+      "tag": "v7.4.0",
+      "commit": "c3c9e263c25d99ce0380d002d59b67737d91b0dc"
+    }
+  }
+}

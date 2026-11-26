@@ -1,0 +1,7 @@
+services:
+  migrate:
+    build: {context: ., dockerfile: infrastructure/docker/worker.Dockerfile}
+  api:
+    build: {context: ., dockerfile: infrastructure/docker/node.Dockerfile, target: api}
+  web:
+    build: {context: ., dockerfile: infrastructure/docker/node.Dockerfile, target: web}
