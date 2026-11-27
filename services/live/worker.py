@@ -81,7 +81,7 @@ def settings(db):
     )
 
 
-def candidate(db, cfg):
+def candidate(db, cfg, after_start=0):
     return first(
         db,
         """SELECT signal.id,signal.created_at,signal.strategy_id,signal.action,signal.reason,
@@ -101,7 +101,7 @@ def candidate(db, cfg):
             cfg["paper_account_id"],
             cfg["strategy_id"],
             cfg["strategy_version"],
-            cfg["enabled_after_signal"],
+            max(cfg["enabled_after_signal"], after_start),
             cfg["enabled_at"],
         ),
     )
@@ -206,6 +206,9 @@ def recover(db, venue):
 def run(db, venue):
     if not first(db, "SELECT pg_try_advisory_lock(91472031, 1) ok")["ok"]:
         return
+    # Existing rows may be reconciled, but cannot become new placements after
+    # an executor restart (even if the paper signal is still within three seconds).
+    after_start = first(db, "SELECT coalesce(max(id),0) signal_id FROM strategy_signals")["signal_id"]
     checked, recovered, revision = 0.0, 0.0, None
     while True:
         cfg = settings(db)
@@ -224,7 +227,7 @@ def run(db, venue):
                 require(not cfg["unresolved"], "UNRECONCILED")
                 heartbeat(db, cfg, expiry, venue.credentials.session_address)
             if cfg["enabled"] and cfg["geoblock_status"] == "ALLOWED" and not cfg["unresolved"]:
-                row = candidate(db, cfg)
+                row = candidate(db, cfg, after_start)
                 if row is not None:
                     raw = venue.market(row)
                     market = verify_market(row, raw, now())

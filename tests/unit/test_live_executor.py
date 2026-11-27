@@ -385,6 +385,7 @@ def test_authorization_uses_only_owner_scope_read_and_validates_session_credenti
 
     fake_sdk = MagicMock()
     fake_sdk.wallet, fake_sdk.signer, fake_sdk.wallet_type = WALLET, SESSION, "DEPOSIT_WALLET"
+    fake_sdk.fetch_api_keys.return_value = (cred.session_api_key,)
     factory = MagicMock(return_value=fake_sdk)
     monkeypatch.setattr(Account, "from_key", lambda key: NS(address=SESSION))
     monkeypatch.setattr(SecureClient, "_create", factory)
@@ -395,7 +396,11 @@ def test_authorization_uses_only_owner_scope_read_and_validates_session_credenti
         assert adapter.authorize(WALLET) > worker.now()
         assert len(requests) == 2
         assert factory.call_args.kwargs["credentials"].key == "fixture-session"
-        assert factory.call_args.kwargs["validate_credentials"] is True
-        assert not fake_sdk.mock_calls
+        assert factory.call_args.kwargs["validate_credentials"] is False
+        fake_sdk.fetch_api_keys.assert_called_once()
+        fake_sdk.fetch_api_keys.return_value = ()
+        with pytest.raises(model.GuardError, match="SESSION_CREDENTIALS"):
+            adapter.authorize(WALLET)
+        factory.assert_called_once()
     finally:
         adapter.close()

@@ -95,13 +95,15 @@ class Venue:
                     "passphrase": cred.session_api_passphrase,
                 }
             )
-            # The pinned SDK's public create() provisions undeployed wallets.
-            # _create validates supplied credentials and skips wallet deployment.
+            # Public create() can deploy wallets. The pinned SDK's automatic
+            # credential validator can also create/derive keys on rejection.
+            # Attach the provided keys only, then validate with the read-only
+            # authenticated key listing below.
             self.client = SecureClient._create(
                 private_key=cred.session_private_key,
                 wallet=cred.wallet_address,
                 credentials=keys,
-                validate_credentials=True,
+                validate_credentials=False,
             )
         require(
             self.client.wallet.lower() == wallet.lower()
@@ -109,6 +111,7 @@ class Venue:
             and self.client.signer.lower() == cred.session_address.lower(),
             "SESSION_IDENTITY",
         )
+        require(cred.session_api_key in self.client.fetch_api_keys(), "SESSION_CREDENTIALS")
         return expiry
 
     def account(self, wallet):

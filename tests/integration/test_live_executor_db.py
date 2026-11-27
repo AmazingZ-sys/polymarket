@@ -60,6 +60,7 @@ def test_guarded_claim_acknowledgement_and_revocation(monkeypatch):
                 selected = worker.candidate(db, cfg)
                 assert selected["id"] == sig["id"] and selected["created_at"] == sig["created_at"]
                 sid = selected["id"]
+                assert worker.candidate(db, cfg, after_start=sid) is None
                 reserve = "SELECT pq_live_reserve(0,%s,%s,%s) ok"
                 assert not worker.first(db, reserve, (sid, 6, 1))["ok"]
                 assert not worker.first(db, reserve, (sid, 5, 4))["ok"]
