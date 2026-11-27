@@ -18,6 +18,16 @@ const displayed = computed(() =>
 const keys = computed(() => keysFor(props.resource, displayed.value))
 const store = useConsole(),
   details = ref<Row | null>(null)
+let afterClose: (() => void) | undefined
+function closeForAction(action: () => void) {
+  afterClose = action
+  details.value = null
+}
+function finishClosing() {
+  const action = afterClose
+  afterClose = undefined
+  action?.()
+}
 function inspect(row: Row) {
   if (props.openRow) props.openRow(row)
   else details.value = row
@@ -64,6 +74,7 @@ function inspect(row: Row) {
   </div>
   <NModal
     :show="!!details"
+    @after-leave="finishClosing"
     @update:show="
       (v) => {
         if (!v) details = null
@@ -90,7 +101,7 @@ function inspect(row: Row) {
       <slot
         name="record-action"
         :row="details"
-        :close="() => (details = null)"
+        :close="closeForAction"
       /></div
   ></NModal>
 </template>

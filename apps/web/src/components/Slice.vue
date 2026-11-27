@@ -43,8 +43,8 @@ watch(
   [() => props.resource, () => JSON.stringify(props.filters), q, limit],
   () => {
     rows.value = []
-    offset.value = 0
-    void refresh()
+    if (offset.value === 0) void refresh()
+    else offset.value = 0
   },
 )
 watch(offset, refresh)
@@ -69,7 +69,8 @@ async function download() {
   try {
     const output: Row[] = []
     const resource = props.resource,
-      filters = { ...base.value }
+      filters = { ...base.value },
+      exportFormat = format.value
     let count = 0
     do {
       const result = await api<Row[]>(
@@ -85,7 +86,7 @@ async function download() {
       count = result.meta?.total ?? output.length
       if (!result.data.length) break
     } while (output.length < count)
-    rowsToFile(output, format.value, resource)
+    rowsToFile(output, exportFormat, resource)
   } catch (e) {
     exportError.value = errorText(e)
   } finally {
@@ -103,6 +104,7 @@ async function download() {
         <Search :size="14" /><input
           v-model="term"
           aria-label="搜索记录"
+          maxlength="200"
           placeholder="搜索记录"
         /><button class="icon" type="submit" aria-label="执行搜索">
           <ArrowRight :size="14" />

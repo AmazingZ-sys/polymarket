@@ -58,10 +58,25 @@ const lossForm = reactive({
   data_quality: '',
 })
 const lossFilters = ref<Record<string, string>>({})
+const lossError = ref('')
+const lossAmountPattern = '(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,8})?'
+function lossUnits(amount: string) {
+  const [whole, fraction = ''] = amount.split('.')
+  return BigInt(whole + fraction.padEnd(8, '0'))
+}
 function applyLossFilters() {
+  lossError.value = ''
   const values = { ...lossForm }
+  if (values.min_loss && values.max_loss && lossUnits(values.min_loss) > lossUnits(values.max_loss)) {
+    lossError.value = '最大亏损须大于或等于最小亏损。'
+    return
+  }
   for (const key of ['start_time', 'end_time'] as const) {
-    if (values[key]) values[key] = new Date(values[key] + ':00Z').toISOString()
+    if (values[key]) values[key] = new Date(values[key] + 'Z').toISOString()
+  }
+  if (values.start_time && values.end_time && values.start_time >= values.end_time) {
+    lossError.value = '归因截止时间须晚于起始时间。'
+    return
   }
   lossFilters.value = values
 }
@@ -115,9 +130,8 @@ function edit(kind: string, row?: Row) {
   command.value = kind
   target.value = row
 }
-function editRecord(close: () => void, kind: string, row: Row) {
-  close()
-  edit(kind, row)
+function editRecord(close: (action: () => void) => void, kind: string, row: Row) {
+  close(() => edit(kind, row))
 }
 function openRecord(row: Row) {
   if (key.value === 'paper-accounts')
@@ -199,24 +213,25 @@ function saved(row: Row) {
     <label
       >最小亏损（USD）<input
         v-model="lossForm.min_loss"
-        type="number"
-        min="0"
-        step=".00000001"
+        inputmode="decimal"
+        :pattern="lossAmountPattern"
+        title="请输入非负十进制金额，最多 13 位整数和 8 位小数"
     /></label>
     <label
       >最大亏损（USD）<input
         v-model="lossForm.max_loss"
-        type="number"
-        min="0"
-        step=".00000001"
+        inputmode="decimal"
+        :pattern="lossAmountPattern"
+        title="请输入非负十进制金额，最多 13 位整数和 8 位小数"
     /></label>
     <label
       >归因起始（UTC）<input
         v-model="lossForm.start_time"
         type="datetime-local"
+        step="any"
     /></label>
     <label
-      >归因截止（UTC）<input v-model="lossForm.end_time" type="datetime-local"
+      >归因截止（UTC）<input v-model="lossForm.end_time" type="datetime-local" step="any"
     /></label>
     <label
       >发出信号的策略<select v-model="lossForm.strategy_id">
@@ -235,6 +250,7 @@ function saved(row: Row) {
       </select></label
     >
     <button class="btn">应用筛选</button>
+    <p v-if="lossError" role="alert" class="error">{{ lossError }}</p>
   </form>
   <p v-if="key === 'market-events' && filters.event_id" class="muted">
     事件 ID · {{ filters.event_id }}

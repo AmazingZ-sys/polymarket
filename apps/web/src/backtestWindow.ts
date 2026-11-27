@@ -74,5 +74,9 @@ export function useBacktestWindow(
     manual.value = false
     generation.value++
   }
-  return { manual, coverage, message, useLatest }
+  function recheck() {
+    manual.value = true
+    generation.value++
+  }
+  return { manual, coverage, message, useLatest, recheck }
 }

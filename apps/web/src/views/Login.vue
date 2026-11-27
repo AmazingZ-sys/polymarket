@@ -18,7 +18,7 @@ const username = ref(''),
   busy = ref(false),
   show = ref(false)
 async function submit() {
-  if (busy.value) return
+  if (busy.value || !store.ready) return
   busy.value = true
   message.value = ''
   try {
@@ -57,6 +57,7 @@ async function submit() {
               <UserRound :size="16" /><input
                 v-model="username"
                 name="username"
+                maxlength="80"
                 required
                 autocomplete="username"
                 placeholder="输入用户名"
@@ -68,6 +69,8 @@ async function submit() {
               <LockKeyhole :size="16" /><input
                 v-model="password"
                 name="password"
+                aria-label="密码"
+                maxlength="256"
                 :type="show ? 'text' : 'password'"
                 required
                 autocomplete="current-password"
@@ -76,6 +79,7 @@ async function submit() {
                 type="button"
                 class="icon"
                 :aria-label="show ? '隐藏密码' : '显示密码'"
+                :aria-pressed="show"
                 @click="show = !show"
               >
                 <component :is="show ? EyeOff : Eye" :size="16" />

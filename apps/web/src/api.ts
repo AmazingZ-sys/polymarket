@@ -9,6 +9,7 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    public code?: string,
   ) {
     super(message)
   }
@@ -47,6 +48,7 @@ export async function api<T>(
       response.status,
       value?.error?.message ||
         '管理服务未返回有效响应（' + response.status + '）。',
+      value?.error?.code,
     )
   }
   return value as Envelope<T>

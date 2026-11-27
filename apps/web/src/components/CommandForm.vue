@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { NModal } from 'naive-ui'
 import { ArrowRight, Check, X } from 'lucide-vue-next'
-import { api, errorText, type Row } from '../api'
+import { api, ApiError, errorText, type Row } from '../api'
 import { useBacktestWindow, utcPeriod } from '../backtestWindow'
 
 const props = defineProps<{ kind: string; record?: Row }>()
@@ -91,7 +91,7 @@ const usesStrategy = [
 ].includes(props.kind)
 const usesDates = ['backtests', 'reports'].includes(props.kind)
 const isBacktest = props.kind === 'backtests'
-const { manual, coverage, message: windowMessage, useLatest } =
+const { manual, coverage, message: windowMessage, useLatest, recheck } =
   useBacktestWindow(isBacktest, assets, periods, values)
 const endpoint = computed(
   () =>
@@ -119,7 +119,7 @@ onMounted(async () => {
       selectVersion()
     }
     if (['experiments', 'reports', 'evaluations'].includes(props.kind))
-      accounts.value = (await api<Row[]>('paper-accounts?limit=200')).data
+      accounts.value = (await api<Row[]>('paper-accounts?mode=PAPER&limit=200')).data
     if (props.kind === 'evaluations') {
       const [ex, bt] = await Promise.all([
         api<Row[]>('experiments?limit=200'),
@@ -161,6 +161,18 @@ function dates() {
   if (!period) throw Error('UTC 截止时间必须晚于起始时间。')
   return period
 }
+function ratio(raw: string, min: string, max: string, label: string) {
+  const parts = /^(\d*)(?:\.(\d*))?$/.exec(raw.trim())
+  if (parts && (parts[1] || parts[2])) {
+    const whole = parts[1].replace(/^0+/, '') || '0'
+    const fraction = (parts[2] || '').replace(/0+$/, '')
+    const value = fraction ? whole + '.' + fraction : whole
+    // Canonical decimals in [0, 1] compare exactly in lexical order.
+    if ((whole === '0' || value === '1') && value >= min && value <= max)
+      return value
+  }
+  throw Error(label + '须在 ' + min + ' 至 ' + max + ' 之间。')
+}
 function prepare() {
   try {
     error.value = ''
@@ -168,13 +180,13 @@ function prepare() {
       assets: assets.value,
       timeframes: periods.value,
       simulation_model: values.model,
-      risk_per_trade: values.risk,
-      daily_loss: values.loss,
-      max_drawdown: values.drawdown,
+      risk_per_trade: ratio(values.risk, '0.000001', '0.005', '单笔风险上限'),
+      daily_loss: ratio(values.loss, '0.000001', '0.02', '单日亏损上限'),
+      max_drawdown: ratio(values.drawdown, '0.000001', '0.05', '最大回撤'),
       tail_seconds: values.tail,
       cost_multiplier: values.feeMultiplier,
       latency_multiplier: values.latencyMultiplier,
-      minimum_edge: values.minimumEdge,
+      minimum_edge: ratio(values.minimumEdge, '0', '1', '最小净价差'),
       strategies: Object.entries(extra.value)
         .filter(([id, v]) => id !== values.strategy && v)
         .map(([strategy_id, strategy_version]) => ({
@@ -263,6 +275,8 @@ function prepare() {
           ...dates(),
           ...(values.account ? { account_id: values.account } : {}),
         }
+        if (Date.parse(String(payload.value.end_time)) > Date.now())
+          throw Error('请选择已结束的报告区间。')
         break
       case 'release':
         payload.value = { reason: values.reason }
@@ -291,6 +305,10 @@ async function commit() {
     )
   } catch (e) {
     error.value = errorText(e)
+    if (isBacktest && e instanceof ApiError && e.code === 'NO_REPLAY_EVENTS') {
+      reviewing.value = false
+      recheck()
+    }
   } finally {
     busy.value = false
   }
@@ -393,10 +411,10 @@ async function commit() {
           <label
             >研究运行成本（USD）<input
               v-model="values.cost"
-              type="number"
+              inputmode="decimal"
+              pattern="(?:0|[1-9][0-9]{0,12})(?:\.[0-9]{1,8})?"
+              title="请输入非负十进制金额，整数部分最多 13 位，小数部分最多 8 位"
               required
-              min="0"
-              step=".00000001"
           /></label>
           <fieldset>
             <legend>人工核验通过项</legend>
@@ -418,11 +436,12 @@ async function commit() {
             ref="nameInput"
             v-model="values.name"
             required
+            pattern=".*\S.*"
             maxlength="120"
             placeholder="自定义研究名称"
         /></label>
-        <div v-if="kind === 'paper-accounts'" class="form-grid">
-          <label
+        <div v-if="kind === 'paper-accounts' || isBacktest" class="form-grid">
+          <label v-if="kind === 'paper-accounts'"
             >运行模式<select v-model="values.mode">
               <option>PAPER</option>
               <option>SHADOW</option>
@@ -488,26 +507,20 @@ async function commit() {
               <label
                 >单笔风险上限（比例）<input
                   v-model="values.risk"
-                  type="number"
-                  min=".000001"
-                  max=".005"
-                  step=".000001"
+                  inputmode="decimal"
+                  title="0.000001 至 0.005"
                   required /></label
               ><label
                 >单日亏损上限（比例）<input
                   v-model="values.loss"
-                  type="number"
-                  min=".000001"
-                  max=".02"
-                  step=".000001"
+                  inputmode="decimal"
+                  title="0.000001 至 0.02"
                   required /></label
               ><label
                 >最大回撤（比例）<input
                   v-model="values.drawdown"
-                  type="number"
-                  min=".000001"
-                  max=".05"
-                  step=".000001"
+                  inputmode="decimal"
+                  title="0.000001 至 0.05"
                   required /></label
               ><label
                 >尾盘研究窗口（秒）<input
@@ -525,7 +538,7 @@ async function commit() {
                   type="number"
                   min="1"
                   max="3"
-                  step=".01"
+                  step="any"
                   required /></label
               ><label
                 >延迟压力倍数<input
@@ -533,15 +546,13 @@ async function commit() {
                   type="number"
                   min="1"
                   max="5"
-                  step=".01"
+                  step="any"
                   required /></label
               ><label
                 >最小净价差<input
                   v-model="values.minimumEdge"
-                  type="number"
-                  min="0"
-                  max="1"
-                  step=".000001"
+                  inputmode="decimal"
+                  title="0 至 1"
                   required
               /></label>
             </div>
@@ -616,6 +627,7 @@ async function commit() {
                 v-model="selected"
                 type="checkbox"
                 :value="String(a.id)"
+                :disabled="selected.length >= 20 && !selected.includes(String(a.id))"
               />{{ a.name }}</label
             >
             <p v-if="!accounts.length" class="muted">请先创建独立模拟账户。</p>
@@ -640,6 +652,7 @@ async function commit() {
           ><label
             >新版本号<input
               v-model="values.newVersion"
+              pattern="[0-9]+\.[0-9]+\.[0-9]+"
               placeholder="1.1.0"
               required /></label
           ><label

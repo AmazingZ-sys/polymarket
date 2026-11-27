@@ -31,6 +31,8 @@ async function fixture(page: Page) {
       }
     } else if (name === 'backtests' && route.request().method() === 'POST') {
       state.submits.push(route.request().postDataJSON())
+      if (!state.coverage)
+        return route.fulfill({ status: 409, json: { error: { code: 'NO_REPLAY_EVENTS', message: '所选窗口的历史事件已不可用。' } } })
       const run = { id: 'fixture-replay', status: 'QUEUED', progress: 0, result: {}, created_at: recent.end_time }
       state.runs = [run]
       data = run
@@ -108,4 +110,32 @@ test('explains historical zero-event runs without inventing a fill count', async
   await expect(row.getByRole('cell', { name: '区间内无回放事件' })).toBeVisible()
   await expect(row.getByRole('cell', { name: '0 / 0' })).toBeVisible()
   await expect(row.getByRole('cell', { name: '0', exact: true })).toHaveCount(0)
+})
+
+test('keyboard dates and a changed window prevent stale replay submission', async ({ page }) => {
+  const state = await fixture(page)
+  await page.getByRole('button', { name: '新建回测' }).click()
+  const dialog = page.getByRole('dialog')
+  const start = dialog.getByLabel('起始时间（UTC）')
+  const end = dialog.getByLabel('截止时间（UTC）')
+  const review = dialog.getByRole('button', { name: '核对配置' })
+  await expect(review).toBeEnabled()
+  // The focused date segment varies by locale. Both arrows edit the native control.
+  await start.focus()
+  await start.press('ArrowDown')
+  await expect(start).not.toHaveValue(recent.start_time.slice(0, -1))
+  await start.press('ArrowUp')
+  await expect(start).toHaveValue(recent.start_time.slice(0, -1))
+  await end.fill(recent.start_time.slice(0, -1))
+  await expect(review).toBeDisabled()
+  await expect(dialog.getByRole('status')).toContainText('截止时间须晚于起始时间')
+  await end.fill(recent.end_time.slice(0, -1))
+  await review.click()
+  state.coverage = false
+  await dialog.getByRole('button', { name: '确认提交' }).click()
+  await expect(dialog.getByRole('alert')).toContainText('历史事件已不可用')
+  await expect(start).toHaveValue(recent.start_time.slice(0, -1))
+  await expect(dialog.getByRole('status')).toContainText('0 条市场事件')
+  await expect(review).toBeDisabled()
+  expect(state.runs).toHaveLength(0)
 })
