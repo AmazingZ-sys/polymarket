@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 const identity = { username: 'test-researcher', role: 'ADMIN' }
+const editedBalance = '2500.00000010'
 async function fixture(page: Page, role = 'ADMIN') {
   let signed = false
   const account = {
@@ -62,7 +63,7 @@ async function fixture(page: Page, role = 'ADMIN') {
       commands.push(path)
       if (path === 'paper-accounts') {
         const body = route.request().postDataJSON()
-        expect(body.initial_balance).toBe('1000')
+        expect(body.initial_balance).toBe(editedBalance)
         expect(body.config.assets).toEqual(['BTC', 'ETH'])
         account.name = body.name
         return send({ data: account })
@@ -105,16 +106,38 @@ test('isolated fixture: sign in, create and control an independent account', asy
   const commands = await fixture(page)
   await signIn(page)
   await page.getByRole('link', { name: '管理模拟盘' }).click()
-  await page.getByRole('button', { name: '创建模拟盘' }).click()
+  const create = page.getByRole('button', { name: '创建模拟盘' })
+  await create.click()
   const dialog = page.getByRole('dialog', { name: '创建模拟盘' })
-  await dialog
-    .getByRole('textbox', { name: '名称', exact: true })
-    .fill('隔离测试账户')
+  const name = dialog.getByRole('textbox', { name: '名称', exact: true })
+  await name.click()
+  await expect(name).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(create).toBeFocused()
+  await create.press('Enter')
+  await expect(name).toBeFocused()
+  await page.keyboard.type('TEST-')
+  await page.keyboard.insertText('隔离测试账户')
+  await expect(name).toHaveValue('TEST-隔离测试账户')
+  await page.keyboard.press('Tab')
+  await expect(dialog.getByLabel('运行模式')).toBeFocused()
+  await page.keyboard.press('Tab')
+  const balance = dialog.getByLabel('初始虚拟资金')
+  await expect(balance).toBeFocused()
+  await page.keyboard.press('ControlOrMeta+a')
+  await page.keyboard.type(editedBalance)
+  await expect(balance).toHaveValue(editedBalance)
+  await dialog.getByRole('button', { name: '核对配置' }).click()
+  await dialog.getByRole('button', { name: '返回修改' }).click()
+  await expect(name).toBeFocused()
+  await expect(name).toHaveValue('TEST-隔离测试账户')
+  await expect(balance).toHaveValue(editedBalance)
   await dialog.getByRole('button', { name: '核对配置' }).click()
   expect(commands).toHaveLength(0)
   await dialog.getByRole('button', { name: '确认提交' }).click()
   await expect(
-    page.getByRole('heading', { name: '隔离测试账户' }),
+    page.getByRole('heading', { name: 'TEST-隔离测试账户' }),
   ).toBeVisible()
   for (const [label, status] of [
     ['启动', 'RUNNING'],

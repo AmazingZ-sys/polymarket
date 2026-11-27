@@ -147,3 +147,65 @@ test("collection contracts, filters, OpenAPI, report idempotency", async () => {
   });
   assert.equal(e.status, 200);
 });
+
+test("scoped replay windows preserve edge observations and reject empty submissions", async () => {
+  const base = "backtests/window?assets=BTC&timeframes=5";
+  const btc = "TEST-BTC-" + suffix, eth = "TEST-ETH-" + suffix;
+  const day = "2023-05-01T";
+  const range = { start_time: day + "10:05:00.078Z", end_time: day + "10:05:59.531Z" };
+  const config = { assets: ["BTC"], timeframes: [5] };
+  const strategyVersion = "9.1." + parseInt(suffix, 16);
+  const fixtureIds: string[] = [];
+  try {
+    await db.query(`INSERT INTO markets(market_id,condition_id,slug,title,asset,timeframe,start_time,end_time,
+      up_token_id,down_token_id,resolution_source,settlement_rule,settlement_rule_version,rule_verified,
+      market_status,accepting_orders,raw_metadata)
+      SELECT id,id,id,id,asset,tf,'2023-05-01T10:00Z','2023-05-01T10:15Z',
+        'up','down','TEST','TEST','r1',true,'OPEN',true,'{}'
+        FROM (VALUES ($1::text,'BTC',5),($2::text,'ETH',15)) AS m(id,asset,tf)`, [btc, eth]);
+    for (const [market, kind, time] of [
+      [btc, "BOOK", "10:01:00Z"],
+      [btc, "METADATA", "10:05:00.078176Z"],
+      [btc, "BOOK", "10:05:59.530336Z"],
+      [btc, "RAW", "10:06:59Z"],
+      [eth, "TRADE", "10:06:30Z"],
+      [null, "REFERENCE", "10:06:30Z"],
+    ]) {
+      const id = randomUUID();
+      fixtureIds.push(id);
+      await db.query(`INSERT INTO engine_events(event_id,market_id,source,kind,event_time,received_at,processed_at,data)
+        VALUES ($1,$2,'SYNTHETIC_TEST',$3,$4,$4,$4,'{}')`, [id, market, kind, day + time]);
+    }
+    assert.equal((await get(base, "")).status, 401);
+    assert.equal((await get("backtests/window?assets=SOL")).status, 400);
+    assert.equal((await get(base + "&start_time=" + range.start_time)).status, 400);
+    const suggested = await (await get(base, viewer)).json();
+    assert.deepEqual(suggested.data, { ...range, event_count: 2 });
+    const manual = await (await get(base + "&" + new URLSearchParams(range))).json();
+    assert.deepEqual(manual.data, suggested.data);
+    const singleton = await (await get("backtests/window?assets=ETH&timeframes=15")).json();
+    assert.ok(Date.parse(singleton.data.start_time) < Date.parse(singleton.data.end_time));
+    assert.equal(singleton.data.event_count, 1);
+    assert.equal((await (await get("backtests/window?assets=ETH&timeframes=5")).json()).data, null);
+    const missing = { start_time: day + "10:06:01Z", end_time: day + "10:07:00Z" };
+    const preview = await (await get(base + "&" + new URLSearchParams(missing))).json();
+    assert.equal(preview.data.event_count, 0);
+    const rejected = await post("backtests", { ...missing, config });
+    assert.equal(rejected.status, 409);
+    assert.equal((await rejected.json()).error.code, "NO_REPLAY_EVENTS");
+    assert.equal((await post("strategy-versions", {
+      strategy_id: "S00", version: strategyVersion, config, description: "Synthetic test scope",
+    })).status, 200);
+    const inherited = await post("backtests", { ...missing, strategy_version: strategyVersion });
+    assert.equal((await inherited.json()).error.code, "NO_REPLAY_EVENTS");
+    const queued = await post("backtests", { ...range, config });
+    assert.equal(queued.status, 200);
+    const run = (await queued.json()).data;
+    assert.equal(run.status, "QUEUED");
+    await db.query("DELETE FROM backtest_runs WHERE id=$1", [run.id]);
+  } finally {
+    await db.query("DELETE FROM strategy_versions WHERE strategy_id='S00' AND version=$1", [strategyVersion]);
+    await db.query("DELETE FROM engine_events WHERE event_id=ANY($1)", [fixtureIds]);
+    await db.query("DELETE FROM markets WHERE market_id=ANY($1)", [[btc, eth]]);
+  }
+});

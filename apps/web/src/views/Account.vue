@@ -266,7 +266,7 @@ async function apply() {
         if (!v && !busyCommand) cmd = ''
       }
     "
-    ><section class="dialog" role="dialog" aria-label="确认账户操作">
+    ><div class="dialog" role="dialog" aria-modal="true" aria-label="确认账户操作">
       <div class="panel-head">
         <h2>确认{{ selected?.label }}模拟盘</h2>
         <button
@@ -290,6 +290,6 @@ async function apply() {
           </button>
         </div>
       </div>
-    </section></NModal
+    </div></NModal
   >
 </template>

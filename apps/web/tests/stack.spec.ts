@@ -35,7 +35,14 @@ test('real stack: sign in, create a paper account, freeze configuration, audit a
   await page.getByRole('button', { name: '创建模拟盘' }).click()
   const form = page.getByRole('dialog', { name: '创建模拟盘' })
   const name = 'TEST-ONLY-browser-' + Date.now()
-  await form.getByRole('textbox', { name: '名称', exact: true }).fill(name)
+  await expect(
+    form.getByRole('textbox', { name: '名称', exact: true }),
+  ).toBeFocused()
+  await page.keyboard.type(name)
+  const balance = '1234.50000001'
+  await form.getByLabel('初始虚拟资金').click()
+  await page.keyboard.press('ControlOrMeta+a')
+  await page.keyboard.type(balance)
   await form.getByText('风险与实验参数', { exact: true }).click()
   await form.getByLabel('费用压力倍数').fill('1.5')
   await form.getByLabel('延迟压力倍数').fill('2')
@@ -43,7 +50,15 @@ test('real stack: sign in, create a paper account, freeze configuration, audit a
     .getByRole('combobox', { name: 'S01', exact: true })
     .selectOption({ index: 1 })
   await form.getByRole('button', { name: '核对配置' }).click()
+  const created = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      new URL(r.url()).pathname === '/api/v1/paper-accounts',
+  )
   await form.getByRole('button', { name: '确认提交' }).click()
+  const response = await created
+  expect(response.ok()).toBe(true)
+  expect((await response.json()).data.initial_balance).toBe(balance)
   await expect(page.getByRole('heading', { name })).toBeVisible()
   await expect(page.locator('.account-bar .tag')).toHaveText('CREATED')
   await expect(page.locator('.table-wrap tbody tr').first()).toBeVisible()

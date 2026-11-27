@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { ArrowUpRight, Inbox, X } from 'lucide-vue-next'
 import { NModal } from 'naive-ui'
 import type { Row } from '../api'
-import { field, keysFor, label } from '../fields'
+import { backtestRow, field, keysFor, label } from '../fields'
 import { useConsole } from '../store'
 const props = defineProps<{
   rows: Row[]
@@ -12,7 +12,10 @@ const props = defineProps<{
   empty?: string
   openRow?: (row: Row) => void
 }>()
-const keys = computed(() => keysFor(props.resource, props.rows))
+const displayed = computed(() =>
+  props.resource === 'backtests' ? props.rows.map(backtestRow) : props.rows,
+)
+const keys = computed(() => keysFor(props.resource, displayed.value))
 const store = useConsole(),
   details = ref<Row | null>(null)
 function inspect(row: Row) {
@@ -31,7 +34,7 @@ function inspect(row: Row) {
       </thead>
       <tbody>
         <tr
-          v-for="(r, i) in rows"
+          v-for="(r, i) in displayed"
           :key="String(r.id ?? r.market_id ?? i) + '-' + i"
         >
           <td v-for="k in keys" :key="k">
@@ -46,7 +49,7 @@ function inspect(row: Row) {
             >
           </td>
           <td>
-            <button class="icon" aria-label="查看记录" @click="inspect(r)">
+            <button class="icon" aria-label="查看记录" @click="inspect(rows[i])">
               <ArrowUpRight :size="16" />
             </button>
           </td>
@@ -66,7 +69,7 @@ function inspect(row: Row) {
         if (!v) details = null
       }
     "
-    ><section class="dialog wide" role="dialog" aria-label="记录详情">
+    ><div class="dialog wide" role="dialog" aria-modal="true" aria-label="记录详情">
       <div class="panel-head">
         <h2>记录详情</h2>
         <button class="icon" aria-label="关闭详情" @click="details = null">
@@ -88,6 +91,6 @@ function inspect(row: Row) {
         name="record-action"
         :row="details"
         :close="() => (details = null)"
-      /></section
+      /></div
   ></NModal>
 </template>

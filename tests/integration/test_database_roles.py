@@ -52,6 +52,7 @@ def test_role_grants_and_private_auth_columns(monkeypatch, tmp_path):
                     db.execute("SELECT * FROM user_sessions")
                 db.execute("RESET ROLE")
                 db.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(renamed["pq_api"])))
+                db.execute("SELECT market_id,received_at FROM market_replay_events LIMIT 0")
                 db.execute("INSERT INTO users(username,password_hash,role) VALUES ('test','salt.test','VIEWER')")
                 assert (
                     db.execute("SELECT role FROM pq_auth_identity('test','test')").fetchone()["role"] == "VIEWER"

@@ -48,7 +48,20 @@ watch(
   },
 )
 watch(offset, refresh)
-defineExpose({ refresh })
+watch([busy, rows], (_, __, onCleanup) => {
+  if (props.resource === 'backtests' && !busy.value && !error.value &&
+      rows.value.some((row) => row.status === 'QUEUED' || row.status === 'RUNNING')) {
+    const timer = window.setTimeout(refresh, 5000)
+    onCleanup(() => window.clearTimeout(timer))
+  }
+})
+function showNewest() {
+  term.value = ''
+  if (!q.value && !offset.value) return refresh()
+  q.value = ''
+  offset.value = 0
+}
+defineExpose({ refresh, showNewest })
 async function download() {
   if (exporting.value) return
   exporting.value = true
@@ -120,13 +133,16 @@ async function download() {
       :rows="rows"
       :resource="resource"
       :loading="busy"
+      :empty="resource === 'backtests'
+        ? (q ? '没有匹配的回测任务。' : '尚未提交回测任务。新建回测可查看已有行情覆盖的 UTC 区间。')
+        : undefined"
       :open-row="openRow"
       ><template #record-action="slot"
         ><slot name="record-action" v-bind="slot" /></template
     ></Table>
     <div class="pagination">
       <span
-        >共 {{ total }} 条<span v-if="total">
+        >共 {{ total }} {{ resource === 'backtests' ? '个回测任务' : '条' }}<span v-if="total">
           · {{ offset + 1 }}–{{ Math.min(offset + limit, total) }}</span
         ></span
       >

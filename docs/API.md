@@ -12,12 +12,15 @@
 |GET|/paper-orders、/paper-fills、/paper-positions、/settlements、/ledger、/equity|account_id 过滤|
 |GET|/strategies、/strategy-versions、/experiments、/attributions、/analytics|策略、实验及结果|
 |GET、POST|/backtest-datasets、/backtest-datasets/{id}/refresh|登记历史数据覆盖请求，复查当前库的可用性|
+|GET|/backtests/window|按 `assets` 和 `timeframes`（逗号分隔）返回最近市场事件区间和计数。传入 UTC 的 `start_time`、`end_time` 时返回该区间市场事件数。默认建议最多取最近一次观测前 15 分钟，相邻观测相隔超过 60 秒时截断。|
 |GET、POST|/backtests、/backtests/{id}/cancel|回放与取消。传入 `dataset_id` 时必须绑定 `BACKTEST_READY` 数据集|
 |GET|/risk、/reports、/improvements、/logs、/system、/jobs、/settings|研究与运维视图|
 
 默认 limit=50，最多 200。offset 从 0 开始。列表支持白名单排序/筛选。重复的同键写请求返回原结果，键被用于另一请求时拒绝。查询分页导出时保留顺序和过滤条件。
 
 GET /evaluations 和 /promotions 提供评审与基线变更历史。POST /evaluations 传入对照实验、候选账户、基础及加费压力回放、期间运行开支和人工证据；服务端记录当次比较的指标与状态。POST /strategy-versions/{strategy}/{version}/promote 要求相同版本的通过记录及人工理由。策略晋级不修改已有账户。
+
+提交回测时必须在所选市场与时间区间内有已持久化的可回放市场事件。空区间返回 HTTP 409 和 `NO_REPLAY_EVENTS`。窗口预查的计数限于所选市场；任务中的总事件数取引擎冻结的完整回放流，其中还可能包含公共参考价与质量事件。
 
 历史数据请求只登记资产、周期、UTC 时间段和本地磁盘配额。系统不会从没有授权的上游补抓历史数据。刷新请求返回 `DATA_UNAVAILABLE`、`DATA_INCOMPLETE` 或 `BACKTEST_READY`，并附事件数、盘口数、缺口数、估算字节数、过期时间及归档分片。只有 `BACKTEST_READY` 可以绑定到新的回测任务。
 

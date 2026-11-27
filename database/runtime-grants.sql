@@ -18,7 +18,7 @@ ALTER FUNCTION pq_promote(text,text,uuid,text,text) SECURITY DEFINER SET search_
 ALTER FUNCTION pq_source_transition() SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp;
 ALTER FUNCTION pq_research_notification() SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp;
 
-GRANT SELECT ON markets,engine_events,orderbook_snapshots,trade_ticks,reference_ticks,data_quality_events,
+GRANT SELECT ON markets,engine_events,market_replay_events,orderbook_snapshots,trade_ticks,reference_ticks,data_quality_events,
     dataset_versions,data_source_status,paper_accounts,paper_sessions,paper_orders,paper_fills,paper_positions,
     paper_settlements,balance_ledger,equity_snapshots,strategy_signals,strategy_evaluations,version_promotions,
     strategy_definitions,strategy_versions,comparison_experiments,research_experiments,backtest_runs,risk_events,

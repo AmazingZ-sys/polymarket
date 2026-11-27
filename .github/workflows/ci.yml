@@ -47,7 +47,7 @@ jobs:
       - run: uv run --frozen ruff check . && uv run --frozen mypy pqcollector services && uv run --frozen pytest -q
       - run: pnpm lint && pnpm typecheck && pnpm build && pnpm --filter @polyquant/api test
       - run: pnpm --filter @polyquant/web exec playwright install --with-deps chromium
-      - run: pnpm --filter @polyquant/web exec playwright test console.spec.ts
+      - run: pnpm --filter @polyquant/web exec playwright test
       - name: Verify image-only deployment bundle in an empty directory
         run: |
           target=$(mktemp -d)

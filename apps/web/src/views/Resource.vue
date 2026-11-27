@@ -127,10 +127,12 @@ function openRecord(row: Row) {
     void router.push('/markets/' + encodeURIComponent(String(row.market_id)))
 }
 function saved(row: Row) {
+  const createdBacktest = command.value === 'backtests'
   command.value = ''
-  message.success('操作已记录')
+  message.success(createdBacktest ? '回测任务已提交，可在列表查看回放进度。' : '操作已记录')
   if (key.value === 'paper-accounts' && row.id)
     void router.push('/paper-accounts/' + row.id)
+  else if (createdBacktest) void slice.value?.showNewest()
   else void slice.value?.refresh()
 }
 </script>

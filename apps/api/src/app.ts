@@ -13,6 +13,7 @@ import {
   type Env,
 } from "./security.js";
 import { resources, dashboard, list } from "./resources.js";
+import { replayWindow } from "./replay.js";
 import { commands, invoke } from "./commands.js";
 
 export const app = new Hono<Env>();
@@ -48,6 +49,7 @@ api.post("/auth/login", login);
 api.post("/auth/logout", logout);
 api.get("/auth/me", (c) => c.json({ data: c.get("user") }));
 api.get("/dashboard", async (c) => c.json({ data: await dashboard() }));
+api.get("/backtests/window", async (c) => c.json({ data: await replayWindow(c.req.query()) }));
 api.get("/paper-accounts/:id", async (c) => {
   const { rows } = await db.query("SELECT * FROM paper_accounts WHERE id=$1", [
     z.uuid().parse(c.req.param("id")),
@@ -101,6 +103,14 @@ function openapi() {
       ]) {
         params.push({ name, in: "query", schema: { type } });
       }
+    }
+    if (path === "/backtests/window") {
+      for (const [name, description] of [
+        ["assets", "逗号分隔的资产 BTC、ETH"],
+        ["timeframes", "逗号分隔的市场周期 5、15"],
+        ["start_time", "自选区间的起点，与 end_time 同时传入"],
+        ["end_time", "自选区间的终点，省略区间时返回最近有观测的窗口或 null"],
+      ]) params.push({ name, in: "query", description, schema: { type: "string" } });
     }
     const response = (description: string, name: string) => ({
       description,
@@ -158,7 +168,7 @@ function openapi() {
     };
   }
   for (const r of Object.keys(resources)) add("/" + r, "get");
-  for (const r of ["/events", "/dashboard", "/auth/me", "/paper-accounts/:id"])
+  for (const r of ["/events", "/dashboard", "/backtests/window", "/auth/me", "/paper-accounts/:id"])
     add(r, "get");
   add("/auth/login", "post", loginSchema);
   add("/auth/logout", "post");

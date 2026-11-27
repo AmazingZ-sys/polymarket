@@ -54,7 +54,7 @@ function ratio(v: unknown) {
         if (!v) emit('close')
       }
     "
-    ><section class="dialog wide compare" role="dialog" aria-label="对照实验">
+    ><div class="dialog wide compare" role="dialog" aria-modal="true" aria-label="对照实验">
       <div class="panel-head">
         <div>
           <small class="kicker">COMPARISON</small>
@@ -114,6 +114,6 @@ function ratio(v: unknown) {
           </dd>
         </dl>
         <Chart :rows="r.snapshots" time-key="created_at" />
-      </article></section
+      </article></div
   ></NModal>
 </template>

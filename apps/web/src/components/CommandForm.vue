@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { NModal } from 'naive-ui'
 import { ArrowRight, Check, X } from 'lucide-vue-next'
 import { api, errorText, type Row } from '../api'
+import { useBacktestWindow, utcPeriod } from '../backtestWindow'
 
 const props = defineProps<{ kind: string; record?: Row }>()
 const emit = defineEmits<{ close: []; saved: [row: Row] }>()
@@ -22,6 +23,8 @@ const titles: Record<string, string> = {
   trigger: '触发维护任务',
 }
 const title = titles[props.kind] || props.kind
+const nameInput = ref<HTMLInputElement | null>(null)
+watch(nameInput, (input) => input?.focus(), { flush: 'post' })
 const strategies = ref<Row[]>([]),
   accounts = ref<Row[]>([]),
   ready = ref(false)
@@ -51,7 +54,7 @@ const values = reactive({
   amount: '1000',
   mode: 'PAPER',
   strategy: 'S00',
-  version: '1.0.0',
+  version: '',
   newVersion: '',
   model: 'conservative-v1',
   risk: '0.005',
@@ -87,6 +90,9 @@ const usesStrategy = [
   'improvements',
 ].includes(props.kind)
 const usesDates = ['backtests', 'reports'].includes(props.kind)
+const isBacktest = props.kind === 'backtests'
+const { manual, coverage, message: windowMessage, useLatest } =
+  useBacktestWindow(isBacktest, assets, periods, values)
 const endpoint = computed(
   () =>
     ({
@@ -106,10 +112,12 @@ const endpoint = computed(
 )
 onMounted(async () => {
   try {
-    if (usesStrategy)
+    if (usesStrategy) {
       strategies.value = (await api<Row[]>('strategy-versions?limit=200')).data
-    if (usesStrategy && versions.value.length)
-      values.version = String(versions.value[0].version)
+      if (!versions.value.length)
+        values.strategy = String(strategies.value[0]?.strategy_id ?? '')
+      selectVersion()
+    }
     if (['experiments', 'reports', 'evaluations'].includes(props.kind))
       accounts.value = (await api<Row[]>('paper-accounts?limit=200')).data
     if (props.kind === 'evaluations') {
@@ -137,12 +145,11 @@ onMounted(async () => {
     error.value = errorText(e)
   }
 })
-watch(
-  () => values.strategy,
-  () => {
-    values.version = String(versions.value[0]?.version ?? '')
-  },
-)
+function selectVersion() {
+  const version = versions.value.find((v) => v.role !== 'RETIRED') ?? versions.value[0]
+  values.version = String(version?.version ?? '')
+}
+watch(() => values.strategy, selectVersion)
 function jsonObject() {
   const obj: unknown = JSON.parse(values.params)
   if (!obj || typeof obj !== 'object' || Array.isArray(obj))
@@ -150,14 +157,9 @@ function jsonObject() {
   return obj
 }
 function dates() {
-  const start = Date.parse(values.start + ':00Z'),
-    end = Date.parse(values.end + ':00Z')
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end)
-    throw Error('UTC 截止时间必须晚于起始时间。')
-  return {
-    start_time: new Date(start).toISOString(),
-    end_time: new Date(end).toISOString(),
-  }
+  const period = utcPeriod(values.start, values.end)
+  if (!period) throw Error('UTC 截止时间必须晚于起始时间。')
+  return period
 }
 function prepare() {
   try {
@@ -199,9 +201,14 @@ function prepare() {
           mode: values.mode,
         }
         break
-      case 'backtests':
-        payload.value = { ...strategy, ...dates() }
+      case 'backtests': {
+        const period = dates()
+        if (!coverage.value || period.start_time !== coverage.value.start_time ||
+            period.end_time !== coverage.value.end_time)
+          throw Error('请先选择有历史市场事件的 UTC 区间。')
+        payload.value = { ...strategy, ...period }
         break
+      }
       case 'experiments':
         if (selected.value.length < 2)
           throw Error('对照实验需要至少两个独立账户。')
@@ -298,7 +305,7 @@ async function commit() {
         if (!v && !busy) emit('close')
       }
     "
-    ><section class="dialog" role="dialog" :aria-label="title">
+    ><div class="dialog" role="dialog" aria-modal="true" :aria-label="title">
       <div class="panel-head">
         <div>
           <small class="kicker">RESEARCH CONSOLE</small>
@@ -408,6 +415,7 @@ async function commit() {
         </template>
         <label v-if="['paper-accounts', 'experiments'].includes(kind)"
           >名称<input
+            ref="nameInput"
             v-model="values.name"
             required
             maxlength="120"
@@ -422,9 +430,9 @@ async function commit() {
           ><label
             >初始虚拟资金（USD）<input
               v-model="values.amount"
-              type="number"
-              min=".00000001"
-              step=".00000001"
+              inputmode="decimal"
+              pattern="(?=.*[1-9])(?:(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,8})?|1000000000000(?:\.0{1,8})?)"
+              title="请输入大于零、最多 1000000000000 的金额，最多 8 位小数"
               required
           /></label>
         </div>
@@ -571,14 +579,23 @@ async function commit() {
               >起始时间（UTC）<input
                 v-model="values.start"
                 type="datetime-local"
+                :step="isBacktest ? 'any' : 60"
+                @input="manual = true"
                 required /></label
             ><label
               >截止时间（UTC）<input
                 v-model="values.end"
                 type="datetime-local"
+                :step="isBacktest ? 'any' : 60"
+                @input="manual = true"
                 required
             /></label></div
         ></template>
+        <template v-if="isBacktest">
+          <p class="muted" role="status">{{ windowMessage }}</p>
+          <button type="button" class="btn" @click="useLatest">使用最近有数据的区间</button>
+          <p v-if="ready && !versions.length" class="error">暂无已登记的策略版本。</p>
+        </template>
         <label v-if="kind === 'reports'"
           >模拟账户<select v-model="values.account">
             <option value="">全部账户</option>
@@ -650,7 +667,7 @@ async function commit() {
         <p v-if="error" role="alert" class="error">{{ error }}</p>
         <div class="form-actions">
           <button type="button" class="btn" @click="emit('close')">取消</button
-          ><button class="primary" :disabled="!ready">
+          ><button class="primary" :disabled="!ready || (isBacktest && (!coverage || !values.version))">
             核对配置<ArrowRight :size="15" />
           </button>
         </div>
@@ -669,6 +686,6 @@ async function commit() {
           </button>
         </div>
       </div>
-    </section></NModal
+    </div></NModal
   >
 </template>

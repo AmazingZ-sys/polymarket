@@ -2,6 +2,10 @@
   "0.1.0": {
     "037_backtest_datasets.sql": "8317b42a7b66465c0e4e192ea1408ab888eee1b236e6d06adb1426b032135342",
     "038_backtest_dataset_admission.sql": "5a03da0ebf2eb080156c1ef6939b19a56ccff189914a3a98989e7ed8370cd1b2",
-    "039_backtest_book_coverage.sql": "1115c109abb12b6db109be8685d3423d4f139d029b4a52d46b43c8dd979d6b30"
+    "039_backtest_book_coverage.sql": "1115c109abb12b6db109be8685d3423d4f139d029b4a52d46b43c8dd979d6b30",
+    "040_market_replay_events.sql": "73a1fd2f80471d4d42075c2e9e770f1257119e57ab7abccdd3991e83b65c5f7f"
+  },
+  "0.2.0": {
+    "040_market_replay_events.sql": "73a1fd2f80471d4d42075c2e9e770f1257119e57ab7abccdd3991e83b65c5f7f"
   }
 }

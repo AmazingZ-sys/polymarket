@@ -17,7 +17,7 @@ const columns: Record<string, string> = {
   strategies: 'strategy_id name description research_status',
   'strategy-versions': 'strategy_id version description created_at',
   experiments: 'name hypothesis status created_at',
-  backtests: 'id status progress created_at',
+  backtests: 'id status progress replay_events fills replay_result created_at',
   analytics: 'name account_id equity realized_pnl fees max_drawdown',
   attributions: 'account_id market_id reason net_pnl created_at',
   improvements: 'strategy_id problem status created_at',
@@ -78,6 +78,10 @@ const labels: Record<string, string> = {
   start_time: '开始时间',
   end_time: '结束时间',
   progress: '进度',
+  replay_events: '已回放 / 总事件',
+  fills: '模拟成交数',
+  replay_result: '回放结果',
+  result: '运行结果',
   reason: '原因',
   problem: '研究问题',
   severity: '级别',
@@ -114,6 +118,33 @@ const labels: Record<string, string> = {
   net_pnl: '模拟净收益',
 }
 export const label = (key: string) => labels[key] || key
+export function backtestRow(row: Row): Row {
+  const result = (row.result ?? {}) as Row
+  const total = result.event_count
+  const progress = typeof row.progress === 'string' || typeof row.progress === 'number'
+    ? Number(row.progress)
+    : NaN
+  let processed: number | null = null
+  if (result.event_counts && typeof result.event_counts === 'object')
+    processed = Object.values(result.event_counts).reduce((sum: number, count) => sum + Number(count), 0)
+  else if (total === 0) processed = 0
+
+  return {
+    id: row.id,
+    status: row.status,
+    progress: Number.isFinite(progress)
+      ? progress.toLocaleString('zh-CN', { maximumFractionDigits: 1 }) + '%'
+      : null,
+    replay_events: total == null
+      ? (row.status === 'QUEUED' ? '等待引擎统计' : null)
+      : (processed ?? '—') + ' / ' + total,
+    fills: result.fills,
+    replay_result: result.error || (total === 0
+      ? '区间内无回放事件'
+      : result.validation === 'INSUFFICIENT_DATA' ? '研究样本不足' : result.validation),
+    created_at: row.created_at,
+  }
+}
 export function keysFor(resource: string, rows: Row[]) {
   const actual = Array.from(new Set(rows.flatMap((row) => Object.keys(row))))
   const preferred = (columns[resource] || '').split(' ').filter(Boolean)

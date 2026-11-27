@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import type { PoolClient } from "pg";
 import { z } from "zod";
 import { transaction, ApiError } from "./db.js";
+import { checkPeriod, period, requireReplayEvents } from "./replay.js";
 import { sha, type Env } from "./security.js";
 
 const id = z.uuid(),
@@ -58,10 +59,6 @@ const account = z
     config: config.optional(),
   })
   .strict();
-const period = z.object({
-  start_time: z.iso.datetime({ offset: true }),
-  end_time: z.iso.datetime({ offset: true }),
-});
 const datasetRequest = period
   .extend({
     assets: z.array(z.enum(["BTC", "ETH"])).min(1).max(2).default(["BTC", "ETH"]),
@@ -149,11 +146,8 @@ export const commands: Record<string, Command> = {
       })
       .strict(),
     run: async (tx, p) => {
-      if (
-        Date.parse(String(p.end_time)) <= Date.parse(String(p.start_time)) ||
-        Date.parse(String(p.end_time)) > Date.now()
-      )
-        throw new ApiError(400, "PERIOD", "请选择已结束的有效时间段");
+      const start = String(p.start_time), end = String(p.end_time);
+      checkPeriod(start, end);
       if (p.dataset_id) {
         const dataset = await singleton(
           tx,
@@ -179,6 +173,16 @@ export const commands: Record<string, Command> = {
           timeframes: options.timeframes ?? dataset.timeframes,
         };
       }
+      const scope = (p.config ?? {}) as z.infer<typeof config>;
+      const registered = scope.assets && scope.timeframes ? {} : (
+        await singleton(tx, "SELECT parameters FROM strategy_versions WHERE strategy_id=$1 AND version=$2", [
+          p.strategy_id, p.strategy_version,
+        ])
+      ).parameters;
+      await requireReplayEvents(
+        tx, scope.assets ?? registered.assets ?? ["BTC", "ETH"],
+        scope.timeframes ?? registered.timeframes ?? [5, 15], start, end,
+      );
       return singleton(
         tx,
         "INSERT INTO backtest_runs(config,dataset_id) VALUES($1,$2) RETURNING *",
