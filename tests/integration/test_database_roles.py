@@ -1,6 +1,7 @@
 """Exercise the shipped role grant matrix in a new database with isolated role names."""
 
 import os
+import re
 from pathlib import Path
 from uuid import uuid4
 
@@ -21,16 +22,17 @@ def test_role_grants_and_private_auth_columns(monkeypatch, tmp_path):
         pytest.skip("TEST_DATABASE_URL required for database role tests")
     suffix = uuid4().hex[:16]
     database = "pq_roles_test_" + suffix
-    renamed = {name: "test_" + name + "_" + suffix for name in ("pq_collector", "pq_engine", "pq_ops", "pq_api")}
+    renamed = {name: "test_" + name + "_" + suffix for name in ("pq_collector", "pq_engine", "pq_ops", "pq_api", "pq_live")}
     for service in ("API", "COLLECTOR", "ENGINE", "OPS"):
         monkeypatch.delenv(f"PQ_{service}_PASSWORD", raising=False)
     monkeypatch.setenv("ARCHIVE_DIR", str(tmp_path))
-    matrix = (Path(__file__).resolve().parents[2] / "database/runtime-grants.sql").read_text()
+    sql_dir = Path(__file__).resolve().parents[2] / "database"
+    matrix = (sql_dir / "runtime-grants.sql").read_text() + (sql_dir / "live-grants.sql").read_text()
     with psycopg.connect(dsn, autocommit=True) as admin:
         admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database)))
         try:
             for name, alias in renamed.items():
-                matrix = matrix.replace(name, alias)
+                matrix = re.sub(rf"\b{name}\b", alias, matrix)
                 admin.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(alias)))
             isolated = make_conninfo(dsn, dbname=database)
             migrate(isolated)
@@ -44,6 +46,17 @@ def test_role_grants_and_private_auth_columns(monkeypatch, tmp_path):
                         has_table_privilege(current_user,'schema_migrations','UPDATE') AS migrate""").fetchone()
                     assert not any(permissions.values())
                     db.execute("RESET ROLE")
+                db.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(renamed["pq_live"])))
+                db.execute("SELECT revision FROM polymarket_account_settings")
+                db.execute("SELECT state FROM polymarket_live_attempts")
+                assert not db.execute("SELECT pq_live_reserve(0,0,1,1) ok").fetchone()["ok"]
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                    db.execute("UPDATE polymarket_account_settings SET enabled=true")
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                    db.execute("UPDATE polymarket_live_attempts SET state='REJECTED'")
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                    db.execute("SELECT * FROM users")
+                db.execute("RESET ROLE")
                 db.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(renamed["pq_collector"])))
                 db.execute(
                     "INSERT INTO data_source_status(source,status,last_attempt_at) VALUES ('test','TEST',now())"
@@ -52,6 +65,16 @@ def test_role_grants_and_private_auth_columns(monkeypatch, tmp_path):
                     db.execute("SELECT * FROM user_sessions")
                 db.execute("RESET ROLE")
                 db.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(renamed["pq_api"])))
+                db.execute("SELECT wallet_address FROM polymarket_account_settings WHERE singleton")
+                db.execute("SELECT executor_ready FROM polymarket_execution_status")
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                    db.execute("UPDATE polymarket_executor_health SET healthy=true")
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                    db.execute("SELECT pq_live_reserve(0,0,1,1)")
+                with pytest.raises(psycopg.errors.CheckViolation):
+                    db.execute("UPDATE polymarket_account_settings SET enabled=true WHERE singleton")
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                    db.execute("DELETE FROM polymarket_account_settings")
                 db.execute("SELECT market_id,received_at FROM market_replay_events LIMIT 0")
                 db.execute("INSERT INTO users(username,password_hash,role) VALUES ('test','salt.test','VIEWER')")
                 assert (

@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/common.sh"
 docker compose version >/dev/null
-python3 - <<'PY'
+if [[ $# -gt 1 || ($# == 1 && $1 != --with-live-role) ]]; then
+  echo 'Usage: scripts/install.sh [--with-live-role]' >&2
+  exit 2
+fi
+python3 - "$@" <<'PY'
 import fcntl
 import os
 from pathlib import Path
 import secrets
+import sys
 import tempfile
 
 keys=("POSTGRES_PASSWORD","ADMIN_PASSWORD","GRAFANA_PASSWORD","PQ_API_PASSWORD","PQ_ENGINE_PASSWORD",
       "PQ_COLLECTOR_PASSWORD","PQ_OPS_PASSWORD")
+if "--with-live-role" in sys.argv[1:]:
+    keys += ("PQ_LIVE_PASSWORD",)
 # Serialize installers with a directory lock. Keep any existing nonempty values.
 lock=os.open(".",os.O_RDONLY)
 try:

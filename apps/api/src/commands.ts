@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { z } from "zod";
 import { transaction, ApiError } from "./db.js";
 import { checkPeriod, period, requireReplayEvents } from "./replay.js";
+import { polymarketAccountCommands } from "./polymarket-account.js";
 import { sha, type Env } from "./security.js";
 
 const id = z.uuid(),
@@ -74,7 +75,9 @@ const singleton = async (tx: PoolClient, sql: string, values: unknown[]) => {
     throw new ApiError(409, "CONFLICT", "当前记录或状态不允许此操作");
   return rows[0];
 };
-type Command = {
+export type Command = {
+  auditDetails?: (input: Record<string, unknown>, result: unknown) => unknown;
+  afterCommit?: (result: unknown) => Promise<unknown>;
   schema: z.ZodType;
   run: (
     tx: PoolClient,
@@ -116,6 +119,7 @@ async function changeAccount(
   ).data;
 }
 export const commands: Record<string, Command> = {
+  ...polymarketAccountCommands,
   "/paper-accounts": {
     schema: account,
     run: (tx, p, c, k) => changeAccount(tx, c, "create", null, p, k),
@@ -362,6 +366,7 @@ export const commands: Record<string, Command> = {
   "/risk/halt": {
     schema: z.object({}).strict(),
     run: async (tx, _p, c, k) => {
+      await tx.query("UPDATE polymarket_account_settings SET enabled=false WHERE singleton AND enabled");
       await tx.query(
         "UPDATE system_settings SET value='true',updated_at=now() WHERE name='global_halt'",
       );
@@ -427,9 +432,9 @@ export async function invoke(c: Context<Env>, command: Command) {
     );
     await tx.query(
       "INSERT INTO audit_logs(actor,action,resource,details) VALUES($1,$2,$3,$4)",
-      [actor, "POST", path, body],
+      [actor, "POST", path, command.auditDetails?.(body, result) ?? body],
     );
     return result;
   });
-  return c.json({ data });
+  return c.json({ data: command.afterCommit ? await command.afterCommit(data) : data });
 }

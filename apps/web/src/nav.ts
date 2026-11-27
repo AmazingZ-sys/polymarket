@@ -141,6 +141,7 @@ export const groups = [
   {
     name: '系统管理',
     items: [
+      { key: 'polymarket-account', label: 'Polymarket 账户', en: 'Polymarket account', icon: Wallet, adminOnly: true },
       { key: 'system', label: '系统监控', en: 'Monitoring', icon: HeartPulse },
       { key: 'jobs', label: '定时任务', en: 'Scheduled jobs', icon: FileClock },
       { key: 'logs', label: '系统日志', en: 'Audit logs', icon: ListTree },

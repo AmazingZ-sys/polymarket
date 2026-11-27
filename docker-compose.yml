@@ -32,6 +32,7 @@ services:
       PQ_ENGINE_PASSWORD: ${PQ_ENGINE_PASSWORD:?run scripts/install.sh}
       PQ_COLLECTOR_PASSWORD: ${PQ_COLLECTOR_PASSWORD:?run scripts/install.sh}
       PQ_OPS_PASSWORD: ${PQ_OPS_PASSWORD:?run scripts/install.sh}
+      PQ_LIVE_PASSWORD: ${PQ_LIVE_PASSWORD:-}
     volumes: [archives:/data/parquet]
     depends_on:
       postgres: {condition: service_healthy}
@@ -63,6 +64,22 @@ services:
       COLLECTOR_BOOK_TAIL_SECONDS: ${COLLECTOR_BOOK_TAIL_SECONDS:-}
 
     command: [python, -m, pqcollector]
+  live-executor:
+    <<: *worker
+    profiles: [live]
+    environment:
+      TZ: UTC
+      DATABASE_URL: postgresql://pq_live:${PQ_LIVE_PASSWORD:-}@postgres:5432/polyquant
+    command: [python, -m, services.live]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - type: bind
+        source: ${POLYMARKET_EXECUTOR_SECRET_FILE:-./.runtime/polymarket-executor.json}
+        target: /run/secrets/polymarket_executor.json
+        read_only: true
+        bind: {create_host_path: false}
   engine:
     <<: *worker
     environment:

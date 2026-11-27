@@ -16,6 +16,8 @@ BTC / ETH 五分钟、十五分钟预测市场的研究工作台。记录真实�
 
 ## 工程与研究
 
+系统管理中的「Polymarket 账户」可将运行中的 S01 模拟策略关联到国际站 Deposit Wallet。支持地区内的管理员可设置本金限额并手动启用自动执行。账户准备、执行器配置与停用步骤见[实盘账户手册](docs/LIVE.md)。
+
 - [原始需求](docs/PRD.md) · [实施路线](docs/ROADMAP.md) · [验收与进度](docs/TASKS.md)
 - [架构](docs/ARCHITECTURE.md) · [数据库](docs/DATABASE.md) · [API](docs/API.md)
 - [实验门槛](docs/RESEARCH.md) · [模拟撮合](docs/SIMULATION_MODEL.md) · [风险](docs/RISK_CONTROL.md)

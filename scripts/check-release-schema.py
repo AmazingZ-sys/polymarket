@@ -11,7 +11,7 @@ from services.migrate import migrate
 src = os.environ["DATABASE_URL"]
 scratch = src.rsplit("/", 1)[0] + "/" + os.environ["PQ_UPGRADE_DB"]
 # Role names and passwords are cluster-scoped, even when CONNECT targets a scratch DB.
-for role in ("API", "ENGINE", "COLLECTOR", "OPS"):
+for role in ("API", "ENGINE", "COLLECTOR", "OPS", "LIVE"):
     os.environ.pop("PQ_" + role + "_PASSWORD", None)
 with psycopg.connect(scratch, autocommit=True) as conn:
     initial = dict(conn.execute("SELECT name,sha256 FROM schema_migrations"))

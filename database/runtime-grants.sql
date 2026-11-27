@@ -24,6 +24,10 @@ GRANT SELECT ON markets,engine_events,market_replay_events,orderbook_snapshots,t
     strategy_definitions,strategy_versions,comparison_experiments,research_experiments,backtest_runs,risk_events,
     trade_attributions,attribution_evidence,performance_reports,account_analytics,improvement_proposals,audit_logs,system_events,
     scheduled_jobs,system_settings,notification_logs,api_commands,user_sessions,market_resolutions,backtest_datasets TO pq_api;
+GRANT SELECT,UPDATE(wallet_address,paper_account_id,strategy_id,strategy_version,max_order_usd,max_total_usd,
+    revision,enabled,enabled_at,enabled_after_signal,attested_at,attested_by,geoblock_status,country,region,checked_at)
+    ON polymarket_account_settings TO pq_api;
+GRANT SELECT ON polymarket_execution_status,polymarket_live_attempts TO pq_api;
 GRANT SELECT(id,username,role),INSERT(username,password_hash,role) ON users TO pq_api;
 GRANT INSERT,DELETE ON user_sessions TO pq_api;
 GRANT INSERT ON backtest_runs,comparison_experiments,strategy_versions,improvement_proposals,api_commands,audit_logs TO pq_api;

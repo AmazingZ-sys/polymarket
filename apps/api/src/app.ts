@@ -13,6 +13,7 @@ import {
   type Env,
 } from "./security.js";
 import { resources, dashboard, list } from "./resources.js";
+import { polymarketAccountStatus } from "./polymarket-account.js";
 import { replayWindow } from "./replay.js";
 import { commands, invoke } from "./commands.js";
 
@@ -49,6 +50,10 @@ api.post("/auth/login", login);
 api.post("/auth/logout", logout);
 api.get("/auth/me", (c) => c.json({ data: c.get("user") }));
 api.get("/dashboard", async (c) => c.json({ data: await dashboard() }));
+api.get("/polymarket-account", async c => {
+  if (c.get("user").role !== "ADMIN") throw new ApiError(403, "FORBIDDEN", "需要管理员权限");
+  return c.json({ data: await polymarketAccountStatus() });
+});
 api.get("/backtests/window", async (c) => c.json({ data: await replayWindow(c.req.query()) }));
 api.get("/paper-accounts/:id", async (c) => {
   const { rows } = await db.query("SELECT * FROM paper_accounts WHERE id=$1", [
@@ -168,7 +173,7 @@ function openapi() {
     };
   }
   for (const r of Object.keys(resources)) add("/" + r, "get");
-  for (const r of ["/events", "/dashboard", "/backtests/window", "/auth/me", "/paper-accounts/:id"])
+  for (const r of ["/events", "/dashboard", "/backtests/window", "/polymarket-account", "/auth/me", "/paper-accounts/:id"])
     add(r, "get");
   add("/auth/login", "post", loginSchema);
   add("/auth/logout", "post");

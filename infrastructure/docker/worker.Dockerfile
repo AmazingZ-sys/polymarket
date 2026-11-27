@@ -3,7 +3,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=UTC PATH="/app/.venv/bin:$PA
 WORKDIR /app
 RUN pip install --no-cache-dir uv==0.13.4
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-cache
+RUN uv sync --frozen --no-dev --extra live --no-cache
 FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=UTC PATH="/app/.venv/bin:$PATH"
 WORKDIR /app

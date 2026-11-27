@@ -17,6 +17,8 @@ def provision_roles(conn) -> None:
         return
     if not all(secrets.values()):
         raise ValueError("Supply credentials for all four database services")
+    if live_password := os.environ.get("PQ_LIVE_PASSWORD"):
+        secrets["live"] = live_password
     database = conn.execute("SELECT current_database()").fetchone()[0]
     with conn.transaction():
         conn.execute("SELECT pg_advisory_xact_lock(2026112601)")
@@ -46,6 +48,8 @@ def provision_roles(conn) -> None:
             )
         conn.execute(sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC").format(sql.Identifier(database)))
         conn.execute((ROOT / "database/runtime-grants.sql").read_text())
+        if "live" in secrets:
+            conn.execute((ROOT / "database/live-grants.sql").read_text())
 
 
 def migrate(dsn: str) -> None:

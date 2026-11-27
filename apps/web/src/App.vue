@@ -129,7 +129,7 @@ const overrides = {
                 </button>
                 <div v-show="!collapsed.has(g.name)">
                   <router-link
-                    v-for="p in g.items"
+                    v-for="p in g.items.filter((item) => !('adminOnly' in item && item.adminOnly) || store.canWrite)"
                     :key="p.key"
                     :to="'/' + p.key"
                     :class="{

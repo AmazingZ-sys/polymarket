@@ -42,9 +42,9 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: '3.12'
           enable-cache: true
-      - run: pnpm install --frozen-lockfile && uv sync --frozen
-      - run: uv run --frozen python -m services.migrate && uv run --frozen python -m services.migrate
-      - run: uv run --frozen ruff check . && uv run --frozen mypy pqcollector services && uv run --frozen pytest -q
+      - run: pnpm install --frozen-lockfile && uv sync --frozen --extra live
+      - run: uv run --frozen --extra live python -m services.migrate && uv run --frozen --extra live python -m services.migrate
+      - run: uv run --frozen --extra live ruff check . && uv run --frozen --extra live mypy pqcollector services && uv run --frozen --extra live pytest -q
       - run: pnpm lint && pnpm typecheck && pnpm build && pnpm --filter @polyquant/api test
       - run: pnpm --filter @polyquant/web exec playwright install --with-deps chromium
       - run: pnpm --filter @polyquant/web exec playwright test

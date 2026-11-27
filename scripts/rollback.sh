@@ -10,6 +10,7 @@ schema=$(schema_id polyquant)
   echo 'Live schema does not match the verified rollback point. Use isolated restore.' >&2; exit 1;
 }
 for svc in api web worker; do docker image inspect "$(value IMAGE_PREFIX)-$svc:$old" >/dev/null; done
+pause_live_for_upgrade
 APP_VERSION="$old" compose up -d --pull never --wait --wait-timeout 180
 APP_VERSION="$old" scripts/healthcheck.sh
 write_version "$old"

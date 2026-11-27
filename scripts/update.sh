@@ -27,6 +27,7 @@ after=$(schema_id "$scratch")
 compose exec -T postgres psql -v ON_ERROR_STOP=1 -U pq -d "$scratch" < scripts/ledger-check.sql
 [[ $(schema_id polyquant) == "$before" ]] || { echo 'Database changed during update preflight' >&2; exit 1; }
 if command -v nginx >/dev/null; then nginx -t; fi
+pause_live_for_upgrade
 # Only advance the checkpoint after schema and archive preflight succeeded.
 checkpoint=$(mktemp .runtime/rollback-point.XXXXXX)
 printf '%s\n' "$old" "$before" "$after" "$backup" > "$checkpoint"

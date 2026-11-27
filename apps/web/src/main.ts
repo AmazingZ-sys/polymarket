@@ -15,6 +15,11 @@ const router = createRouter({
       component: () => import('./views/Dashboard.vue'),
     },
     {
+      path: '/polymarket-account',
+      name: 'polymarket-account',
+      component: () => import('./views/PolymarketAccount.vue'),
+    },
+    {
       path: '/paper-accounts/:id',
       name: 'paper-account',
       component: () => import('./views/Account.vue'),
@@ -25,7 +30,7 @@ const router = createRouter({
       component: () => import('./views/Market.vue'),
     },
     ...pages
-      .filter((p) => !['dashboard', 'paper-account', 'market'].includes(p.key))
+      .filter((p) => !['dashboard', 'paper-account', 'market', 'polymarket-account'].includes(p.key))
       .map((p) => ({
         path: '/' + p.key,
         name: p.key,

@@ -25,3 +25,15 @@ GET /evaluations 和 /promotions 提供评审与基线变更历史。POST /evalu
 历史数据请求只登记资产、周期、UTC 时间段和本地磁盘配额。系统不会从没有授权的上游补抓历史数据。刷新请求返回 `DATA_UNAVAILABLE`、`DATA_INCOMPLETE` 或 `BACKTEST_READY`，并附事件数、盘口数、缺口数、估算字节数、过期时间及归档分片。只有 `BACKTEST_READY` 可以绑定到新的回测任务。
 
 来源查看可用 /reference-prices、/data-quality、/orderbooks、/trades、/datasets。GET /analytics 以账户为单位统计，NULL 为样本或分母不足。POST /risk/halt 全局暂停模拟账户，POST /risk/release 需要 reason，随后按账户恢复。完整有效字段以 OpenAPI 端点为准。
+## 国际站账户
+
+已登录的管理员可用 `GET /api/v1/polymarket-account` 查询公开配置、授权修订号、地区检查、待核对记录、本金占用和各币种实际手续费。写入操作沿用现有命令的同源认证、幂等键与审计。控制台在「系统管理 → Polymarket 账户」提供这些操作。
+
+| 方法和路径 | 用途 |
+| --- | --- |
+| `POST /api/v1/polymarket-account/config` | 保存 wallet_address、paper_account_id、strategy_id、strategy_version、max_order_usd 和 max_total_usd，产生新修订并关闭授权 |
+| `POST /api/v1/polymarket-account/check` | 从服务出口查询交易所地域状态 |
+| `POST /api/v1/polymarket-account/enable` | 提交当前 revision 与 eligibility_confirmed=true，通过即时准入后启用 |
+| `POST /api/v1/polymarket-account/disable` | 停用后续自动下单 |
+
+限额传十进制字符串。一个钱包的累计本金包括已确认本金与尚未释放的预留。手续费保留原币种，缺少可验证回报时返回 null。密钥通过执行器的本地只读文件提供。
