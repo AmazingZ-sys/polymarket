@@ -56,9 +56,10 @@ async function edit(form: Locator, label: string, text: string) {
 }
 async function choose(form: Locator, label: string, value: string) {
   const control = form.getByRole('combobox', { name: new RegExp('^' + label) })
-  await control.click()
+  await control.focus()
   await expect(control).toBeFocused()
   await control.selectOption(value)
+  await expect(control).toHaveValue(value)
   await control.press('Tab')
   await expect(control).toHaveValue(value)
 }
